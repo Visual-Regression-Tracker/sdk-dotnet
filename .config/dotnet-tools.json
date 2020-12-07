@@ -7,6 +7,12 @@
       "commands": [
         "reportgenerator"
       ]
+    },
+    "microsoft.dotnet-openapi": {
+      "version": "5.0.0",
+      "commands": [
+        "dotnet-openapi"
+      ]
     }
   }
 }
