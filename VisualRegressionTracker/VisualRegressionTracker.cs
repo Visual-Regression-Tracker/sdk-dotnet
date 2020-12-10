@@ -34,8 +34,8 @@ namespace VisualRegressionTracker
 
         public VisualRegressionTracker(Config config = null, HttpClient httpClient = null)
         {
-            this.config = config ?? Config.get_default();
-            this.config.check_config();
+            this.config = config ?? Config.GetDefault();
+            this.config.CheckComplete();
 
             this.client = new ApiClient(
                 this.config.ApiUrl,

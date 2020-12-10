@@ -43,5 +43,39 @@ namespace VisualRegressionTracker.Tests
             var dto = Builder<DtoType>.CreateNew().Build();
             return dto;
         }
+
+        [Fact]
+        public void Exception()
+        {
+            var headers = new Dictionary<string, IEnumerable<string>>();
+            var ex = new ApiException(
+                "message", 
+                2,
+                "response", 
+                headers,
+                new Exception("inner"));
+
+            Assert.Equal("response", ex.Response);
+            Assert.Equal(2, ex.StatusCode);
+            Assert.Equal(headers, ex.Headers);
+        }
+
+        [Fact]
+        public void Exception_Generic()
+        {
+            var headers = new Dictionary<string, IEnumerable<string>>();
+            var ex = new ApiException<string>(
+                "message", 
+                2,
+                "response", 
+                headers,
+                "result",
+                new Exception("inner"));
+
+            Assert.Equal("response", ex.Response);
+            Assert.Equal(2, ex.StatusCode);
+            Assert.Equal(headers, ex.Headers);
+            Assert.Equal("result", ex.Result);
+        }
     }
 }
