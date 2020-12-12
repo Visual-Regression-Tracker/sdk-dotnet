@@ -13,9 +13,9 @@ namespace VisualRegressionTracker
         private class Disposer : IAsyncDisposable 
         {
             private readonly VisualRegressionTracker tracker;
-            private readonly CancellationToken cancellationToken;
+            private readonly CancellationToken? cancellationToken;
 
-            public Disposer(VisualRegressionTracker tracker, CancellationToken cancellationToken)
+            public Disposer(VisualRegressionTracker tracker, CancellationToken? cancellationToken)
             {
                 this.tracker = tracker;
                 this.cancellationToken = cancellationToken;
@@ -50,19 +50,19 @@ namespace VisualRegressionTracker
         public string BuildId => buildId;
         public string ProjectId => projectId;
 
-        public async Task<IAsyncDisposable> Start(CancellationToken cancellationToken)
+        public async Task<IAsyncDisposable> Start(CancellationToken? cancellationToken = null)
         {
             try
             {
-                var response = await client.BuildsController_createAsync(
-                    new CreateBuildDto
-                    {
-                        Project = config.Project,
-                        BranchName = config.BranchName,
-                        CiBuildId = config.CiBuildId
-                    },
-                    cancellationToken
-                );
+                var dto = new CreateBuildDto
+                {
+                    Project = config.Project,
+                    BranchName = config.BranchName,
+                    CiBuildId = config.CiBuildId
+                };
+                var response = cancellationToken.HasValue
+                    ? await client.BuildsController_createAsync(dto, cancellationToken.Value)
+                    : await client.BuildsController_createAsync(dto);
 
                 buildId = response.Id;
                 projectId = response.ProjectId;
@@ -78,14 +78,16 @@ namespace VisualRegressionTracker
             }
         }
 
-        public async ValueTask Stop(CancellationToken cancellationToken)
+        public async ValueTask Stop(CancellationToken? cancellationToken = null)
         {
             if (!IsStarted)
                 throw new VisualRegressionTrackerError("Visual Regression Tracker has not been started");
 
             try
             {
-                await client.BuildsController_stopAsync(buildId);
+                var response = cancellationToken.HasValue
+                    ? await client.BuildsController_stopAsync(buildId, cancellationToken.Value)
+                    : await client.BuildsController_stopAsync(buildId);
                 buildId = null;
                 projectId = null;
             }
@@ -100,12 +102,14 @@ namespace VisualRegressionTracker
         }
 
         protected async Task<TestRunResult> SubmitTestRun(
-            CreateTestRequestDto testRun, CancellationToken cancellationToken)
+            CreateTestRequestDto testRun, CancellationToken? cancellationToken)
         {
             if (!IsStarted)
                 throw new VisualRegressionTrackerError("Visual Regression Tracker has not been started");
 
-            var response = await client.TestRunsController_postTestRunAsync(testRun, cancellationToken);
+            var response = cancellationToken.HasValue
+                ? await client.TestRunsController_postTestRunAsync(testRun, cancellationToken.Value)
+                : await client.TestRunsController_postTestRunAsync(testRun);
 
             var status = response.Status switch
             {
@@ -134,7 +138,7 @@ namespace VisualRegressionTracker
         public async Task<TestRunResult> Track(
             string name,
             string imageBase64,
-            CancellationToken cancellationToken,
+            CancellationToken? cancellationToken = null,
             string os = null,
             string browser = null,
             string viewport = null,
@@ -175,7 +179,7 @@ namespace VisualRegressionTracker
         public Task<TestRunResult> Track(
             string name,
             Stream image,
-            CancellationToken cancellationToken,
+            CancellationToken? cancellationToken = null,
             string os = null,
             string browser = null,
             string viewport = null,
@@ -198,7 +202,7 @@ namespace VisualRegressionTracker
         public Task<TestRunResult> Track(
             string name,
             byte[] image,
-            CancellationToken cancellationToken,
+            CancellationToken? cancellationToken = null,
             string os = null,
             string browser = null,
             string viewport = null,
