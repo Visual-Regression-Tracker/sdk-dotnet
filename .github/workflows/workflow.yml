@@ -9,6 +9,7 @@ on:
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
         os: ['windows-latest', 'ubuntu-latest', 'macos-latest']
 
@@ -26,6 +27,7 @@ jobs:
       - name: Test
         run: bin/test.sh
       - name: Codacy Coverage Reporter
+        if: ${{ matrix.os == 'ubuntu-latest' }}
         uses: codacy/codacy-coverage-reporter-action@master
         with:
           project-token: ${{ secrets.CODACY_TOKEN }}
