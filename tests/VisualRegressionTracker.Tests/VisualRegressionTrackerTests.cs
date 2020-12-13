@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -59,6 +60,7 @@ namespace VisualRegressionTracker.Tests
                     Project = config.Project,
                     CiBuildId = config.CiBuildId,
                 },
+                HttpStatusCode.Created,
                 buildDto);
 
             await vrt.Start(tokenSource.Token);
@@ -98,6 +100,7 @@ namespace VisualRegressionTracker.Tests
                     Project = config.Project,
                     CiBuildId = config.CiBuildId,
                 },
+                HttpStatusCode.Created,
                 buildDto);
 
             await using (await vrt.Start(tokenSource.Token))
@@ -109,7 +112,8 @@ namespace VisualRegressionTracker.Tests
                 mock.Reset();
                 mock.SetupRequest(
                     HttpMethod.Patch,
-                    "http://localhost:4200/builds/" + vrt.BuildId);
+                    "http://localhost:4200/builds/" + vrt.BuildId,
+                    HttpStatusCode.OK);
             }
             
             Assert.False(vrt.IsStarted);
@@ -125,7 +129,8 @@ namespace VisualRegressionTracker.Tests
             mock.Reset();
             mock.SetupRequest(
                 HttpMethod.Patch,
-                "http://localhost:4200/builds/" + vrt.BuildId);
+                "http://localhost:4200/builds/" + vrt.BuildId,
+                HttpStatusCode.OK);
 
             await vrt.Stop(tokenSource.Token);
 
@@ -190,6 +195,7 @@ namespace VisualRegressionTracker.Tests
                         new IgnoreAreaDto{X=1, Y=2, Width=3, Height=4}
                     }
                 },
+                HttpStatusCode.Created,
                 responseDto
             );
 
@@ -237,6 +243,7 @@ namespace VisualRegressionTracker.Tests
                     Name = "image name",
                     ImageBase64 = "image base 64",
                 },
+                HttpStatusCode.Created,
                 responseDto
             );
 
@@ -283,6 +290,7 @@ namespace VisualRegressionTracker.Tests
                     Name = "image name",
                     ImageBase64 = "image base 64",
                 },
+                HttpStatusCode.Created,
                 responseDto
             );
 
@@ -316,6 +324,7 @@ namespace VisualRegressionTracker.Tests
                     Name = "image name",
                     ImageBase64 = "image base 64",
                 },
+                HttpStatusCode.Created,
                 responseDto
             );
 
@@ -349,6 +358,7 @@ namespace VisualRegressionTracker.Tests
                     Name = "image name",
                     ImageBase64 = expectedBase64,
                 },
+                HttpStatusCode.Created,
                 responseDto
             );
 
@@ -378,6 +388,7 @@ namespace VisualRegressionTracker.Tests
                     Name = "image name",
                     ImageBase64 = expectedBase64,
                 },
+                HttpStatusCode.Created,
                 responseDto
             );
 

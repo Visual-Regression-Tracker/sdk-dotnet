@@ -118,7 +118,8 @@
               "type": "string"
             },
             "ciBuildId": {
-              "type": "string"
+              "type": "string",
+              "nullable": true
             },
             "number": {
               "type": "number"
@@ -141,7 +142,8 @@
               "type": "string"
             },
             "userId": {
-              "type": "string"
+              "type": "string",
+              "nullable": true
             },
             "passedCount": {
               "type": "number"
@@ -286,19 +288,23 @@
               "type": "string"
             },
             "diffName": {
-              "type": "string"
+              "type": "string",
+              "nullable": true
             },
             "baselineName": {
-              "type": "string"
+              "type": "string",
+              "nullable": true
             },
             "diffPercent": {
-              "type": "number"
+              "type": "number",
+              "nullable": true
             },
             "diffTollerancePercent": {
               "type": "number"
             },
             "pixelMisMatchCount": {
-              "type": "number"
+              "type": "number",
+              "nullable": true
             },
             "status": {
               "type": "string"
@@ -575,7 +581,7 @@
             }
           },
           "responses": {
-            "200": {
+            "201": {
               "description": "",
               "content": {
                 "application/json": {
@@ -701,7 +707,7 @@
             }
           },
           "responses": {
-            "200": {
+            "201": {
               "description": "",
               "content": {
                 "application/json": {

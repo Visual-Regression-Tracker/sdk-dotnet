@@ -18,6 +18,7 @@ namespace VisualRegressionTracker.Tests
             HttpMethod expectedMethod,
             string expectedUrl,
             TReq expectedRequest,
+            HttpStatusCode responseStatusCode,
             TResp responseDto)
         {
             Action<HttpRequestMessage, CancellationToken> callback = (request, ct) => 
@@ -40,7 +41,7 @@ namespace VisualRegressionTracker.Tests
                     ItExpr.IsAny<CancellationToken>()
                 )
                 .ReturnsAsync(new HttpResponseMessage {
-                    StatusCode = HttpStatusCode.OK,
+                    StatusCode = responseStatusCode,
                     Content = new StringContent(responseJson)
                 })
                 .Callback<HttpRequestMessage, CancellationToken>(callback)
@@ -50,9 +51,10 @@ namespace VisualRegressionTracker.Tests
         public static void SetupRequest(
             this Mock<HttpMessageHandler> mock,
             HttpMethod expectedMethod,
-            string expectedUrl)
+            string expectedUrl,
+            HttpStatusCode responseStatusCode)
         {
-            SetupRequest<string, string>(mock, expectedMethod, expectedUrl, null, null);
+            SetupRequest<string, string>(mock, expectedMethod, expectedUrl, null, responseStatusCode, null);
         }
 
         public static void SetupRequest(

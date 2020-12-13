@@ -37,8 +37,10 @@ namespace VisualRegressionTracker
             this.config = config ?? Config.GetDefault();
             this.config.CheckComplete();
 
+            var apiUrl = this.config.ApiUrl + (this.config.ApiUrl.EndsWith('/') ? "" : "/");
+
             this.client = new ApiClient(
-                this.config.ApiUrl,
+                apiUrl,
                 httpClient ?? new HttpClient()
             )
             {
