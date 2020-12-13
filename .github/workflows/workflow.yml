@@ -26,7 +26,7 @@ jobs:
       - name: Test
         run: bin/test.sh
       - name: Codacy Coverage Reporter
-        uses: codacy/codacy-coverage-reporter-action@0.2.0
+        uses: codacy/codacy-coverage-reporter-action@master
         with:
           project-token: ${{ secrets.CODACY_TOKEN }}
           coverage-reports: 'tests/**/coverage.cobertura.xml'
