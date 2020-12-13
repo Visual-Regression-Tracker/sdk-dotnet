@@ -1,6 +1,6 @@
 # .Net SDK for [Visual Regression Tracker](https://github.com/Visual-Regression-Tracker/Visual-Regression-Tracker)
 
-[![NuGet version](https://buildstats.info/nuget/VisualRegressionTracker)](https://www.nuget.org/packages/VisualRegressionTracker)
+[![NuGet version](https://buildstats.info/nuget/VisualRegressionTracker?includePreReleases=true)](https://www.nuget.org/packages/VisualRegressionTracker)
 [![Codacy Badge](https://app.codacy.com/project/badge/Grade/0b98190cea064d6f9f1210da653ba37b)](https://www.codacy.com/gh/Visual-Regression-Tracker/sdk-dotnet?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=Visual-Regression-Tracker/sdk-dotnet&amp;utm_campaign=Badge_Grade)
 [![Codacy Badge](https://app.codacy.com/project/badge/Coverage/0b98190cea064d6f9f1210da653ba37b)](https://www.codacy.com/gh/Visual-Regression-Tracker/sdk-dotnet?utm_source=github.com&utm_medium=referral&utm_content=Visual-Regression-Tracker/sdk-dotnet&utm_campaign=Badge_Coverage)
 
@@ -79,7 +79,7 @@ vrt = new VisualRegressionTracker();
 await using (await vrt.Start())
 {
     ...
-    # track test runs
+    // track test runs
     ...
 }
 ```
@@ -88,7 +88,7 @@ Without using:
 ```csharp
 await vrt.Start()
 ...
-# track test runs
+// track test runs
 ...
 await vrt.Stop()
 ```
@@ -137,7 +137,7 @@ using PlaywrightSharp;
 using VisualRegressionTracker;
 ```
 
-#### Start playwright and navigate to page
+#### Capture a screenshot using Playwright
 ```csharp
 using var playwright = await Playwright.CreateAsync();
 await using var browser = await playwright.Chromium.LaunchAsync();
@@ -146,7 +146,7 @@ await page.GoToAsync("https://github.com/Visual-Regression-Tracker/sdk-dotnet/tr
 var screenshot = await page.ScreenshotAsync();
 ```
 
-#### Capture a screenshot
+#### Track changes using Visual Regression Tracker
 ```csharp
 var vrt = new VisualRegressionTracker.VisualRegressionTracker();
 await using var cleanup = await vrt.Start();
