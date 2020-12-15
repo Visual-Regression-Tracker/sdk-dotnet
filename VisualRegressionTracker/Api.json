@@ -257,8 +257,7 @@
               "type": "string"
             },
             "diffTollerancePercent": {
-              "type": "number",
-              "nullable": true
+              "type": "number"
             },
             "merge": {
               "type": "boolean"

@@ -8,7 +8,7 @@ namespace VisualRegressionTracker
     public class Config
     {
         private static readonly JsonSerializer serializer = new JsonSerializer();
-        public const string DefaultPath = "vrt.json";
+        public static readonly string DefaultPath = "vrt.json";
 
         [JsonProperty("apiUrl")]
         public string ApiUrl { get; set; } = "http://localhost:4200";
@@ -25,27 +25,37 @@ namespace VisualRegressionTracker
 
         public void CheckComplete()
         {
-            if (string.IsNullOrEmpty(ApiUrl))
+            if (string.IsNullOrEmpty(ApiUrl)) {
                 throw new MissingConfigurationError(nameof(ApiUrl), $"{nameof(ApiUrl)} is not specified.'");
-            if (string.IsNullOrEmpty(BranchName))
+            }
+            if (string.IsNullOrEmpty(BranchName)) {
                 throw new MissingConfigurationError(nameof(BranchName), $"{nameof(BranchName)} is not specified.'");
-            if (string.IsNullOrEmpty(Project))
+            }
+            if (string.IsNullOrEmpty(Project)) {
                 throw new MissingConfigurationError(nameof(Project), $"{nameof(Project)} is not specified.'");
-            if (string.IsNullOrEmpty(ApiKey))
+            }
+            if (string.IsNullOrEmpty(ApiKey)) {
                 throw new MissingConfigurationError(nameof(ApiKey), $"{nameof(ApiKey)} is not specified.'");
+            }
         }
 
-        public static Config GetDefault(string path = null)
+        public static Config GetDefault()
+        {
+            return GetDefault(null);
+        }
+
+        public static Config GetDefault(string path)
         {
             var default_path = Path.Join(determine_config_path(), DefaultPath);
             Config cfg;
 
-            if (path != null)
+            if (path != null) {
                 cfg = FromFile(path);
-            else if (File.Exists(default_path))
+            } else if (File.Exists(default_path)) {
                 cfg = FromFile(default_path);
-            else 
+            } else {
                 cfg = new Config();
+            }
 
             cfg.ApplyEnvironment();
 
@@ -87,8 +97,9 @@ namespace VisualRegressionTracker
         private static void maybe_apply_env(string name, Action<string> action)
         {
             var value = Environment.GetEnvironmentVariable(name);
-            if (!string.IsNullOrEmpty(value))
+            if (!string.IsNullOrEmpty(value)) {
                 action(value);
+            }
         }
 
         private static string determine_config_path()

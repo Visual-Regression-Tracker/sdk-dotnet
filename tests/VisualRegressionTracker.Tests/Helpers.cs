@@ -20,6 +20,7 @@ namespace VisualRegressionTracker.Tests
             TReq expectedRequest,
             HttpStatusCode responseStatusCode,
             TResp responseDto)
+            where TReq : class
         {
             Action<HttpRequestMessage, CancellationToken> callback = (request, ct) => 
             {

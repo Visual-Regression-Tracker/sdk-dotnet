@@ -32,7 +32,15 @@ namespace VisualRegressionTracker
         private string buildId;
         private string projectId;
 
-        public VisualRegressionTracker(Config config = null, HttpClient httpClient = null)
+        public VisualRegressionTracker() : this(null, null)
+        {
+        }
+
+        public VisualRegressionTracker(Config config) : this(config, null) 
+        {
+        }
+
+        public VisualRegressionTracker(Config config, HttpClient httpClient)
         {
             this.config = config ?? Config.GetDefault();
             this.config.CheckComplete();
@@ -52,7 +60,17 @@ namespace VisualRegressionTracker
         public string BuildId => buildId;
         public string ProjectId => projectId;
 
-        public async Task<IAsyncDisposable> Start(CancellationToken? cancellationToken = null)
+        public Task<IAsyncDisposable> Start()
+        {
+            return Start(null);
+        }
+
+        public Task<IAsyncDisposable> Start(CancellationToken cancellationToken)
+        {
+            return Start((CancellationToken?) cancellationToken);
+        }
+
+        protected async Task<IAsyncDisposable> Start(CancellationToken? cancellationToken)
         {
             try
             {
@@ -79,15 +97,26 @@ namespace VisualRegressionTracker
                 throw new VisualRegressionTrackerError(ex);
             }
         }
-
-        public async ValueTask Stop(CancellationToken? cancellationToken = null)
+         
+        public ValueTask Stop()
         {
-            if (!IsStarted)
+            return Stop(null);
+        }
+         
+        public ValueTask Stop(CancellationToken cancellationToken)
+        {
+            return Stop((CancellationToken?) cancellationToken);
+        }
+
+        protected async ValueTask Stop(CancellationToken? cancellationToken)
+        {
+            if (!IsStarted) {
                 throw new VisualRegressionTrackerError("Visual Regression Tracker has not been started");
+            }
 
             try
             {
-                var response = cancellationToken.HasValue
+                var _ = cancellationToken.HasValue
                     ? await client.BuildsController_stopAsync(buildId, cancellationToken.Value)
                     : await client.BuildsController_stopAsync(buildId);
                 buildId = null;
@@ -106,8 +135,9 @@ namespace VisualRegressionTracker
         protected async Task<TestRunResult> SubmitTestRun(
             CreateTestRequestDto testRun, CancellationToken? cancellationToken)
         {
-            if (!IsStarted)
+            if (!IsStarted) {
                 throw new VisualRegressionTrackerError("Visual Regression Tracker has not been started");
+            }
 
             var response = cancellationToken.HasValue
                 ? await client.TestRunsController_postTestRunAsync(testRun, cancellationToken.Value)
@@ -145,7 +175,7 @@ namespace VisualRegressionTracker
             string browser = null,
             string viewport = null,
             string device = null,
-            double? diffTollerancePercent = default,
+            double? diffTollerancePercent = null,
             IEnumerable<IgnoreAreaDto> ignoreAreas = null)
         {
             var dto = new CreateTestRequestDto
@@ -159,11 +189,11 @@ namespace VisualRegressionTracker
                 Browser = browser,
                 Viewport = viewport,
                 Device = device,
-                DiffTollerancePercent = diffTollerancePercent,
+                DiffTollerancePercent = diffTollerancePercent ?? 0,
                 IgnoreAreas = ignoreAreas == null ? null : new List<IgnoreAreaDto>(ignoreAreas)
             };
 
-            var result = await SubmitTestRun(dto, cancellationToken);
+            var result = await SubmitTestRun(dto, cancellationToken).ConfigureAwait(false);
 
             if (!config.EnableSoftAssert && result.Status != TestRunStatus.Ok)
             {
@@ -186,7 +216,7 @@ namespace VisualRegressionTracker
             string browser = null,
             string viewport = null,
             string device = null,
-            double? diffTollerancePercent = default,
+            double? diffTollerancePercent = null,
             IEnumerable<IgnoreAreaDto> ignoreAreas = null)
         {
             using var base64Stream = new CryptoStream(image, new ToBase64Transform(), CryptoStreamMode.Read);
@@ -209,7 +239,7 @@ namespace VisualRegressionTracker
             string browser = null,
             string viewport = null,
             string device = null,
-            double? diffTollerancePercent = default,
+            double? diffTollerancePercent = null,
             IEnumerable<IgnoreAreaDto> ignoreAreas = null)
         {
             using var memoryStream = new MemoryStream(image);

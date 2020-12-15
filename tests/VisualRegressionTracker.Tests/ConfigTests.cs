@@ -13,8 +13,9 @@ namespace VisualRegressionTracker.Tests
     {
         public static IEnumerable<object[]> Configs()
         {
-            foreach (var c in Builder<Config>.CreateListOfSize(10).Build())
+            foreach (var c in Builder<Config>.CreateListOfSize(10).Build()) {
                 yield return new[] {c};
+            }
         }
 
         [Theory]
@@ -171,7 +172,11 @@ namespace VisualRegressionTracker.Tests
         {
             oldCurrentDir = Directory.GetCurrentDirectory();
             var newDir = $"{methodUnderTest.DeclaringType.Name}.{methodUnderTest.Name}";
-            if (Directory.Exists(newDir)) Directory.Delete(newDir, true);
+            
+            if (Directory.Exists(newDir)) {
+                Directory.Delete(newDir, true);
+            }
+
             Directory.CreateDirectory(newDir);
             Directory.SetCurrentDirectory(newDir);
         }

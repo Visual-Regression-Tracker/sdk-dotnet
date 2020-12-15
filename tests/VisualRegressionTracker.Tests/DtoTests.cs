@@ -11,9 +11,11 @@ namespace VisualRegressionTracker.Tests
     {
         public static IEnumerable<object[]> AllDtoTypes()
         {
-            foreach (var type in typeof(VisualRegressionTracker).Assembly.GetTypes())
-                if (type.Name.EndsWith("Dto"))
+            foreach (var type in typeof(VisualRegressionTracker).Assembly.GetTypes()) {
+                if (type.Name.EndsWith("Dto")) {
                     yield return new object[] { type };
+                }
+            }
         }
 
         [Theory]
@@ -26,8 +28,9 @@ namespace VisualRegressionTracker.Tests
                 {"b", 2}
             };
 
-            if (dtoType == typeof(CreateTestRequestDto))
+            if (dtoType == typeof(CreateTestRequestDto)) {
                 dto.IgnoreAreas = new[] {new IgnoreAreaDto{X=1, Y=2, Height=3, Width=4}};
+            }
 
             var json = JsonConvert.SerializeObject(dto);
             dynamic dto2 = JsonConvert.DeserializeObject(json, dtoType);

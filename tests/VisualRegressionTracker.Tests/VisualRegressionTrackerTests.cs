@@ -63,6 +63,35 @@ namespace VisualRegressionTracker.Tests
                 HttpStatusCode.Created,
                 buildDto);
 
+            await vrt.Start();
+
+            Assert.True(vrt.IsStarted);
+            Assert.Equal(buildDto.ProjectId, vrt.ProjectId);
+            Assert.Equal(buildDto.Id, vrt.BuildId);
+
+            mock.VerifyRequest(1, req => {
+                req.Headers.TryGetValues("apiKey", out var values);
+                Assert.Equal(new[] {config.ApiKey}, values);
+            });
+        }
+
+        [Fact]
+        public async Task Start_CancellationToken()
+        {
+            var buildDto = Builder<BuildDto>.CreateNew().Build();
+            
+            mock.SetupRequest(
+                HttpMethod.Post,
+                "http://localhost:4200/builds",
+                new CreateBuildDto
+                {
+                    BranchName = config.BranchName,
+                    Project = config.Project,
+                    CiBuildId = config.CiBuildId,
+                },
+                HttpStatusCode.Created,
+                buildDto);
+
             await vrt.Start(tokenSource.Token);
 
             Assert.True(vrt.IsStarted);
@@ -82,7 +111,7 @@ namespace VisualRegressionTracker.Tests
             mock.SetupRequest(exception);
 
             await Assert.ThrowsAsync<VisualRegressionTrackerError>(async () => {
-                await vrt.Start(tokenSource.Token);
+                await vrt.Start();
             });
         }
 
@@ -103,7 +132,7 @@ namespace VisualRegressionTracker.Tests
                 HttpStatusCode.Created,
                 buildDto);
 
-            await using (await vrt.Start(tokenSource.Token))
+            await using (await vrt.Start())
             {
                 Assert.True(vrt.IsStarted);
                 Assert.Equal(buildDto.ProjectId, vrt.ProjectId);
@@ -132,6 +161,29 @@ namespace VisualRegressionTracker.Tests
                 "http://localhost:4200/builds/" + vrt.BuildId,
                 HttpStatusCode.OK);
 
+            await vrt.Stop();
+
+            Assert.False(vrt.IsStarted);
+            Assert.Null(vrt.BuildId);
+            Assert.Null(vrt.ProjectId);
+
+            mock.VerifyRequest(1, req => {
+                req.Headers.TryGetValues("apiKey", out var values);
+                Assert.Equal(new[] {config.ApiKey}, values);
+            });
+        }
+
+        [Fact]
+        public async Task Stop_CancellationToken()
+        {
+            await Start();
+            
+            mock.Reset();
+            mock.SetupRequest(
+                HttpMethod.Patch,
+                "http://localhost:4200/builds/" + vrt.BuildId,
+                HttpStatusCode.OK);
+
             await vrt.Stop(tokenSource.Token);
 
             Assert.False(vrt.IsStarted);
@@ -148,7 +200,7 @@ namespace VisualRegressionTracker.Tests
         public async Task Stop_ThrowsIfNotStarted()
         {
             await Assert.ThrowsAsync<VisualRegressionTrackerError>(async () => {
-                await vrt.Stop(tokenSource.Token);
+                await vrt.Stop();
             });
         }
 
@@ -162,7 +214,7 @@ namespace VisualRegressionTracker.Tests
             mock.SetupRequest(exception);
 
             await Assert.ThrowsAsync<VisualRegressionTrackerError>(async () => {
-                await vrt.Stop(tokenSource.Token);
+                await vrt.Stop();
             });
         }
 
@@ -249,8 +301,7 @@ namespace VisualRegressionTracker.Tests
 
             var result = await vrt.Track(
                 "image name",
-                "image base 64",
-                tokenSource.Token
+                "image base 64"
             );
 
             Assert.Equal(TestRunStatus.Ok, result.Status);
@@ -264,7 +315,7 @@ namespace VisualRegressionTracker.Tests
         public async Task Track_ThrowsIfNotStarted()
         {
             await Assert.ThrowsAsync<VisualRegressionTrackerError>(async () => {
-                await vrt.Track("name", "image base 64", tokenSource.Token);
+                await vrt.Track("name", "image base 64");
             });
         }
 
@@ -296,7 +347,7 @@ namespace VisualRegressionTracker.Tests
 
             var ex = await Assert.ThrowsAsync<VisualRegressionTrackerError>(async () => 
             {
-                 await vrt.Track("image name", "image base 64", tokenSource.Token);
+                 await vrt.Track("image name", "image base 64");
             });
 
             Assert.Equal(expectedMessage, ex.Message);
@@ -329,7 +380,7 @@ namespace VisualRegressionTracker.Tests
             );
 
             config.EnableSoftAssert = true;
-            var result = await vrt.Track("image name", "image base 64", tokenSource.Token);
+            var result = await vrt.Track("image name", "image base 64");
 
             Assert.Equal(expectedStatus, result.Status);
         }
@@ -362,7 +413,7 @@ namespace VisualRegressionTracker.Tests
                 responseDto
             );
 
-            await vrt.Track("image name", imageStream, tokenSource.Token);
+            await vrt.Track("image name", imageStream);
         }
 
         [Fact]
@@ -392,7 +443,7 @@ namespace VisualRegressionTracker.Tests
                 responseDto
             );
 
-            await vrt.Track("image name", imageContent, tokenSource.Token);
+            await vrt.Track("image name", imageContent);
         }
     }
 }
