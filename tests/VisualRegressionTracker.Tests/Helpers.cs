@@ -89,7 +89,10 @@ namespace VisualRegressionTracker.Tests
 
         public static string ReadAsString(this HttpContent content) 
         {
-            if (content == null) return null;
+            if (content == null) {
+                return null;
+            }
+            
             var result =  new StreamReader(content.ReadAsStream()).ReadToEnd();
             return string.IsNullOrEmpty(result) ? null : result;
         }

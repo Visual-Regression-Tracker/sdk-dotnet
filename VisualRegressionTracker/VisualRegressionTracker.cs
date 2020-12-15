@@ -116,9 +116,12 @@ namespace VisualRegressionTracker
 
             try
             {
-                var _ = cancellationToken.HasValue
-                    ? await client.BuildsController_stopAsync(buildId, cancellationToken.Value)
-                    : await client.BuildsController_stopAsync(buildId);
+                if (cancellationToken.HasValue) {
+                    await client.BuildsController_stopAsync(buildId, cancellationToken.Value);
+                } else {
+                    await client.BuildsController_stopAsync(buildId);
+                }
+
                 buildId = null;
                 projectId = null;
             }
