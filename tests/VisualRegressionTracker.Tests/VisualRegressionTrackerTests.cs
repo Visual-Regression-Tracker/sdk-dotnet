@@ -241,6 +241,7 @@ namespace VisualRegressionTracker.Tests
                     Browser = "browser",
                     Viewport = "viewport",
                     Device = "device",
+                    CustomTags = "customTags",
                     DiffTollerancePercent = 15,
                     IgnoreAreas = new [] 
                     {
@@ -259,6 +260,7 @@ namespace VisualRegressionTracker.Tests
                 browser: "browser",
                 viewport: "viewport",
                 device: "device",
+                customTags: "customTags",
                 diffTollerancePercent: 15,
                 ignoreAreas: new[] 
                 { 
