@@ -9,3 +9,4 @@ htmlcov
 !.vscode/extensions.json
 nuget_key.txt
 coverage.xml
+/.vs/sdk-dotnet/v16
