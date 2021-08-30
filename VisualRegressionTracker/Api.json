@@ -244,6 +244,9 @@
             "device": {
               "type": "string"
             },
+            "customTags": {
+              "type": "string"
+            },
             "branchName": {
               "type": "string"
             },

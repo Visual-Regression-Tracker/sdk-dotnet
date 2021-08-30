@@ -178,6 +178,7 @@ namespace VisualRegressionTracker
             string browser = null,
             string viewport = null,
             string device = null,
+            string customTags = null,
             double? diffTollerancePercent = null,
             IEnumerable<IgnoreAreaDto> ignoreAreas = null)
         {
@@ -192,6 +193,7 @@ namespace VisualRegressionTracker
                 Browser = browser,
                 Viewport = viewport,
                 Device = device,
+                CustomTags = customTags,
                 DiffTollerancePercent = diffTollerancePercent ?? 0,
                 IgnoreAreas = ignoreAreas == null ? null : new List<IgnoreAreaDto>(ignoreAreas)
             };
@@ -219,6 +221,7 @@ namespace VisualRegressionTracker
             string browser = null,
             string viewport = null,
             string device = null,
+            string customTags = null,
             double? diffTollerancePercent = null,
             IEnumerable<IgnoreAreaDto> ignoreAreas = null)
         {
@@ -230,7 +233,7 @@ namespace VisualRegressionTracker
                 name,
                 imageBase64,
                 cancellationToken,
-                os, browser, viewport, device, diffTollerancePercent, ignoreAreas
+                os, browser, viewport, device, customTags, diffTollerancePercent, ignoreAreas
             );
         }
 
@@ -242,6 +245,7 @@ namespace VisualRegressionTracker
             string browser = null,
             string viewport = null,
             string device = null,
+            string customTags = null,
             double? diffTollerancePercent = null,
             IEnumerable<IgnoreAreaDto> ignoreAreas = null)
         {
@@ -251,7 +255,7 @@ namespace VisualRegressionTracker
                 name,
                 memoryStream,
                 cancellationToken,
-                os, browser, viewport, device, diffTollerancePercent, ignoreAreas
+                os, browser, viewport, device, customTags, diffTollerancePercent, ignoreAreas
             );
         }
     }

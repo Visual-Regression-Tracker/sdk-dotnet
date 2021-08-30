@@ -1,8 +1,8 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net5.0</TargetFramework>
     <PackageId>VisualRegressionTracker</PackageId>
-    <Version>4.7.0</Version>
+    <Version>4.7.1</Version>
     <Authors>Daniel Crowe</Authors>
     <Company>Visual Regression Tracker</Company>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
