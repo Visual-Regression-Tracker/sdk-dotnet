@@ -358,6 +358,9 @@ namespace VisualRegressionTracker.Tests
         [Theory]
         [InlineData("new", TestRunStatus.New)]
         [InlineData("unresolved", TestRunStatus.Unresolved)]
+        [InlineData("failed", TestRunStatus.Failed)]
+        [InlineData("approved", TestRunStatus.Approved)]
+        [InlineData("autoApproved", TestRunStatus.AutoApproved)]
         public async Task Track_DoesntThrowIfSoftAssert(string status, TestRunStatus expectedStatus)
         {
             await Start();

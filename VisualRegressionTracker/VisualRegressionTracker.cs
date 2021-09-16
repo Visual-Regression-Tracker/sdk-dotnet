@@ -151,6 +151,9 @@ namespace VisualRegressionTracker
                 "new" => TestRunStatus.New,
                 "ok" => TestRunStatus.Ok,
                 "unresolved" => TestRunStatus.Unresolved,
+                "failed" => TestRunStatus.Failed,
+                "approved" => TestRunStatus.Approved,
+                "autoApproved" => TestRunStatus.AutoApproved,
                 _ => throw new VisualRegressionTrackerError("Unexpected status")
             };
 
