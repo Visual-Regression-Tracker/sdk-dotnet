@@ -7,5 +7,8 @@ namespace VisualRegressionTracker
         New,
         Ok,
         Unresolved,
+        Failed,
+        Approved,
+        AutoApproved
     }
 }
