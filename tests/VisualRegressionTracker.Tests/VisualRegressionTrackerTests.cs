@@ -388,9 +388,9 @@ namespace VisualRegressionTracker.Tests
         }
 
         [Theory]
-        [InlineData(false, "failed", TestRunStatus.Failed)]
-        [InlineData(false, "approved", TestRunStatus.Approved)]
-        public async Task Track_UnexpectedStatusThrownIfNotSoftAssert(bool enableSoftAssert, string status, TestRunStatus expectedStatus)
+        [InlineData(false, "failed")]
+        [InlineData(false, "approved")]
+        public async Task Track_UnexpectedStatusThrownIfNotSoftAssert(bool enableSoftAssert, string status)
         {
             await Start();
 
