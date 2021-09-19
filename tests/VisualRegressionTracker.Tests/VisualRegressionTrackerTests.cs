@@ -358,9 +358,6 @@ namespace VisualRegressionTracker.Tests
         [Theory]
         [InlineData("new", TestRunStatus.New)]
         [InlineData("unresolved", TestRunStatus.Unresolved)]
-        [InlineData("failed", TestRunStatus.Failed)]
-        [InlineData("approved", TestRunStatus.Approved)]
-        [InlineData("autoApproved", TestRunStatus.AutoApproved)]
         public async Task Track_DoesntThrowIfSoftAssert(string status, TestRunStatus expectedStatus)
         {
             await Start();
@@ -385,6 +382,103 @@ namespace VisualRegressionTracker.Tests
             );
 
             config.EnableSoftAssert = true;
+            var result = await vrt.Track("image name", "image base 64");
+
+            Assert.Equal(expectedStatus, result.Status);
+        }
+
+        [Theory]
+        [InlineData(false, "failed", TestRunStatus.Failed)]
+        [InlineData(false, "approved", TestRunStatus.Approved)]
+        public async Task Track_UnexpectedStatusThrownIfNotSoftAssert(bool enableSoftAssert, string status, TestRunStatus expectedStatus)
+        {
+            await Start();
+
+            var responseDto = Builder<TestRunResultDto>.CreateNew().Build();
+            responseDto.Status = status;
+
+            mock.Reset();
+            mock.SetupRequest(
+                HttpMethod.Post,
+                "http://localhost:4200/test-runs",
+                new CreateTestRequestDto
+                {
+                    BranchName = config.BranchName,
+                    ProjectId = vrt.ProjectId,
+                    BuildId = vrt.BuildId,
+                    Name = "image name",
+                    ImageBase64 = "image base 64",
+                },
+                HttpStatusCode.Created,
+                responseDto
+            );
+
+            config.EnableSoftAssert = enableSoftAssert;
+            var ex = Assert.ThrowsAsync<VisualRegressionTrackerError>(async () => await vrt.Track("image name", "image base 64"));
+            Assert.Equal("Unexpected status", ex.Result.Message);
+        }
+
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task Track_AutoApprovedDoesntThrow(bool enableSoftAssert)
+        {
+            await Start();
+
+            var responseDto = Builder<TestRunResultDto>.CreateNew().Build();
+            responseDto.Status = "autoApproved";
+
+            mock.Reset();
+            mock.SetupRequest(
+                HttpMethod.Post,
+                "http://localhost:4200/test-runs",
+                new CreateTestRequestDto
+                {
+                    BranchName = config.BranchName,
+                    ProjectId = vrt.ProjectId,
+                    BuildId = vrt.BuildId,
+                    Name = "image name",
+                    ImageBase64 = "image base 64",
+                },
+                HttpStatusCode.Created,
+                responseDto
+            );
+
+            config.EnableSoftAssert = enableSoftAssert;
+            var result = await vrt.Track("image name", "image base 64");
+
+            Assert.Equal(TestRunStatus.AutoApproved, result.Status);
+        }
+
+        [Theory]
+        [InlineData(true, "failed", TestRunStatus.Failed)]
+        [InlineData(true, "approved", TestRunStatus.Approved)]
+        [InlineData(true, "unresolved", TestRunStatus.Unresolved)]
+        [InlineData(false, "ok", TestRunStatus.Ok)]
+        public async Task Track_ThrowsUnexpectedStatus(bool enableSoftAssert, string status, TestRunStatus expectedStatus)
+        {
+            await Start();
+
+            var responseDto = Builder<TestRunResultDto>.CreateNew().Build();
+            responseDto.Status = status;
+
+            mock.Reset();
+            mock.SetupRequest(
+                HttpMethod.Post,
+                "http://localhost:4200/test-runs",
+                new CreateTestRequestDto
+                {
+                    BranchName = config.BranchName,
+                    ProjectId = vrt.ProjectId,
+                    BuildId = vrt.BuildId,
+                    Name = "image name",
+                    ImageBase64 = "image base 64",
+                },
+                HttpStatusCode.Created,
+                responseDto
+            );
+
+            config.EnableSoftAssert = enableSoftAssert;
             var result = await vrt.Track("image name", "image base 64");
 
             Assert.Equal(expectedStatus, result.Status);
