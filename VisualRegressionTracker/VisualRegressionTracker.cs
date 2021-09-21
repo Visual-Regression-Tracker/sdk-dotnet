@@ -204,9 +204,7 @@ namespace VisualRegressionTracker
             var result = await SubmitTestRun(dto, cancellationToken).ConfigureAwait(false);
 
             if (result.Status == TestRunStatus.AutoApproved)
-            {
                 return result;
-            }
 
             if (!config.EnableSoftAssert && result.Status != TestRunStatus.Ok)
             {
