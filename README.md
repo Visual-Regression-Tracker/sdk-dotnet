@@ -22,7 +22,7 @@ using VisualRegressionTracker;
 
 #### As code
 ```csharp
-config = new Config(
+config = new Config {
     // apiUrl - URL where backend is running 
     ApiUrl="http://localhost:4200",
 
@@ -40,7 +40,7 @@ config = new Config(
 
     // enableSoftAssert - Log errors instead of exceptions
     EnableSoftAssert=false,
-);
+};
 
 vrt = new VisualRegressionTracker(config);
 ```
