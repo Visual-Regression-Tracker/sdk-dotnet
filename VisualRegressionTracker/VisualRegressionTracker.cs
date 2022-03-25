@@ -52,7 +52,8 @@ namespace VisualRegressionTracker
                 httpClient ?? new HttpClient()
             )
             {
-                ApiKey = this.config.ApiKey
+                ApiKey = this.config.ApiKey,
+                Project = this.config.Project
             };
         }
 

@@ -70,8 +70,10 @@ namespace VisualRegressionTracker.Tests
             Assert.Equal(buildDto.Id, vrt.BuildId);
 
             mock.VerifyRequest(1, req => {
-                req.Headers.TryGetValues("apiKey", out var values);
-                Assert.Equal(new[] {config.ApiKey}, values);
+                req.Headers.TryGetValues("apiKey", out var apiKey);
+                Assert.Equal(new[] {config.ApiKey}, apiKey);
+                req.Headers.TryGetValues("project", out var project);
+                Assert.Equal(new[] {config.Project}, project);
             });
         }
 
@@ -99,8 +101,10 @@ namespace VisualRegressionTracker.Tests
             Assert.Equal(buildDto.Id, vrt.BuildId);
 
             mock.VerifyRequest(1, req => {
-                req.Headers.TryGetValues("apiKey", out var values);
-                Assert.Equal(new[] {config.ApiKey}, values);
+                req.Headers.TryGetValues("apiKey", out var apiKey);
+                Assert.Equal(new[] {config.ApiKey}, apiKey);
+                req.Headers.TryGetValues("project", out var project);
+                Assert.Equal(new[] {config.Project}, project);
             });
         }
 
@@ -168,8 +172,10 @@ namespace VisualRegressionTracker.Tests
             Assert.Null(vrt.ProjectId);
 
             mock.VerifyRequest(1, req => {
-                req.Headers.TryGetValues("apiKey", out var values);
-                Assert.Equal(new[] {config.ApiKey}, values);
+                req.Headers.TryGetValues("apiKey", out var apiKey);
+                Assert.Equal(new[] {config.ApiKey}, apiKey);
+                req.Headers.TryGetValues("project", out var project);
+                Assert.Equal(new[] {config.Project}, project);
             });
         }
 
@@ -191,8 +197,10 @@ namespace VisualRegressionTracker.Tests
             Assert.Null(vrt.ProjectId);
 
             mock.VerifyRequest(1, req => {
-                req.Headers.TryGetValues("apiKey", out var values);
-                Assert.Equal(new[] {config.ApiKey}, values);
+                req.Headers.TryGetValues("apiKey", out var apiKey);
+                Assert.Equal(new[] {config.ApiKey}, apiKey);
+                req.Headers.TryGetValues("project", out var project);
+                Assert.Equal(new[] {config.Project}, project);
             });
         }
 
