@@ -184,6 +184,7 @@ namespace VisualRegressionTracker
             string device = null,
             string customTags = null,
             double? diffTollerancePercent = null,
+            string comment = null,
             IEnumerable<IgnoreAreaDto> ignoreAreas = null)
         {
             var dto = new CreateTestRequestDto
@@ -198,6 +199,7 @@ namespace VisualRegressionTracker
                 Viewport = viewport,
                 Device = device,
                 CustomTags = customTags,
+                Comment = comment,
                 DiffTollerancePercent = diffTollerancePercent ?? 0,
                 IgnoreAreas = ignoreAreas == null ? null : new List<IgnoreAreaDto>(ignoreAreas)
             };
@@ -232,6 +234,7 @@ namespace VisualRegressionTracker
             string device = null,
             string customTags = null,
             double? diffTollerancePercent = null,
+            string comment = null,
             IEnumerable<IgnoreAreaDto> ignoreAreas = null)
         {
             using var base64Stream = new CryptoStream(image, new ToBase64Transform(), CryptoStreamMode.Read);
@@ -242,7 +245,7 @@ namespace VisualRegressionTracker
                 name,
                 imageBase64,
                 cancellationToken,
-                os, browser, viewport, device, customTags, diffTollerancePercent, ignoreAreas
+                os, browser, viewport, device, customTags, diffTollerancePercent, comment, ignoreAreas
             );
         }
 
@@ -256,6 +259,7 @@ namespace VisualRegressionTracker
             string device = null,
             string customTags = null,
             double? diffTollerancePercent = null,
+            string comment = null,
             IEnumerable<IgnoreAreaDto> ignoreAreas = null)
         {
             using var memoryStream = new MemoryStream(image);
@@ -264,7 +268,7 @@ namespace VisualRegressionTracker
                 name,
                 memoryStream,
                 cancellationToken,
-                os, browser, viewport, device, customTags, diffTollerancePercent, ignoreAreas
+                os, browser, viewport, device, customTags, diffTollerancePercent, comment, ignoreAreas
             );
         }
     }

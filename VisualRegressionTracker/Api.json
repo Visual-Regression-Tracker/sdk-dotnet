@@ -256,6 +256,9 @@
             "buildId": {
               "type": "string"
             },
+            "comment": {
+              "type": "string"
+            },
             "projectId": {
               "type": "string"
             },

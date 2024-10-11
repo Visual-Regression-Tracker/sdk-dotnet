@@ -251,6 +251,7 @@ namespace VisualRegressionTracker.Tests
                     Device = "device",
                     CustomTags = "customTags",
                     DiffTollerancePercent = 15,
+                    Comment = "testcomment",
                     IgnoreAreas = new [] 
                     {
                         new IgnoreAreaDto{X=1, Y=2, Width=3, Height=4}
@@ -270,6 +271,7 @@ namespace VisualRegressionTracker.Tests
                 device: "device",
                 customTags: "customTags",
                 diffTollerancePercent: 15,
+                comment: "testcomment",
                 ignoreAreas: new[] 
                 { 
                     new IgnoreAreaDto{X=1, Y=2, Width=3, Height=4}
