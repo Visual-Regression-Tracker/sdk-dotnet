@@ -112,6 +112,7 @@ await vrt.Track(
     browser: "Chrome",
     viewport: "800x600",
     device: "PC",
+    comment: "test comment",
 
     // Array of areas to be ignored
     ignoreAreas: new [] {
