@@ -33,9 +33,6 @@ jobs:
       - name: Test
         shell: bash
         run: bin/test.sh
-      - name: Pack
-        if: matrix.os == 'ubuntu-latest'
-        run: dotnet pack VisualRegressionTracker --configuration Release --output artifacts
       # secrets are not passed to pull requests from forks
       - name: Upload coverage to Codacy
         if: matrix.os == 'ubuntu-latest' && env.CODACY_PROJECT_TOKEN != ''

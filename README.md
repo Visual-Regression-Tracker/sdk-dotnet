@@ -204,4 +204,4 @@ The `Release` workflow then tests and packs the SDK, publishes it to NuGet throu
 [trusted publishing](https://learn.microsoft.com/nuget/nuget-org/trusted-publishing)
 and creates the GitHub release. It needs a trusted publishing policy on nuget.org for
 this repository, workflow `release.yml` and environment `nuget`, and the
-`NUGET_USER` secret holding the nuget.org user name that owns the policy.
+`NUGET_USER` repository variable holding the nuget.org user name that owns the policy.
