@@ -1,9 +1,12 @@
 using System;
+using System.Diagnostics;
+using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
@@ -19,6 +22,9 @@ namespace VisualRegressionTracker
             Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
         };
 
+        private const int MaxRetries = 3;
+        private static readonly TimeSpan MaxRetryDelay = TimeSpan.FromSeconds(60);
+
         private readonly HttpClient httpClient;
         private readonly string apiUrl;
         private readonly string apiKey;
@@ -31,6 +37,8 @@ namespace VisualRegressionTracker
             this.apiKey = apiKey;
             this.project = project;
         }
+
+        internal Func<TimeSpan, CancellationToken, Task> Delay { get; set; } = Task.Delay;
 
         public string ImageUrl(string imageName)
         {
@@ -52,25 +60,66 @@ namespace VisualRegressionTracker
             return Send<TestRunResultDto>(HttpMethod.Post, "/test-runs", testRun, cancellationToken);
         }
 
-        private async Task<T> Send<T>(HttpMethod method, string path, object body, CancellationToken cancellationToken)
+        public Task<TestRunResultDto> PostTestRunMultipart(
+            CreateTestRequestDto testRun, ReadOnlyMemory<byte> image, CancellationToken cancellationToken)
         {
-            using var request = new HttpRequestMessage(method, apiUrl + path)
-            {
-                Content = new ByteArrayContent(JsonSerializer.SerializeToUtf8Bytes(body, jsonOptions))
-            };
-            request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json") { CharSet = "utf-8" };
-            request.Headers.Add("apiKey", apiKey);
-            request.Headers.Add("project", project);
+            return Send<TestRunResultDto>(HttpMethod.Post, "/test-runs/multipart", () => Multipart(testRun, image), cancellationToken);
+        }
 
+        private Task<T> Send<T>(HttpMethod method, string path, object body, CancellationToken cancellationToken)
+        {
+            var json = JsonSerializer.SerializeToUtf8Bytes(body, jsonOptions);
+            return Send<T>(method, path, () =>
+            {
+                var content = new ByteArrayContent(json);
+                content.Headers.ContentType = new MediaTypeHeaderValue("application/json") { CharSet = "utf-8" };
+                return content;
+            }, cancellationToken);
+        }
+
+        private static MultipartFormDataContent Multipart(CreateTestRequestDto testRun, ReadOnlyMemory<byte> image)
+        {
+            var form = new MultipartFormDataContent();
+            foreach (var (name, value) in JsonSerializer.SerializeToNode(testRun, jsonOptions).AsObject())
+            {
+                var text = value.GetValueKind() == JsonValueKind.String ? value.GetValue<string>() : value.ToJsonString(jsonOptions);
+                form.Add(new StringContent(text), name);
+            }
+            var file = new ReadOnlyMemoryContent(image);
+            file.Headers.ContentType = new MediaTypeHeaderValue("image/png");
+            form.Add(file, "image", "image.png");
+            return form;
+        }
+
+        private async Task<T> Send<T>(HttpMethod method, string path, Func<HttpContent> content, CancellationToken cancellationToken)
+        {
+            long attemptStarted = 0;
             try
             {
-                using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-                if (!response.IsSuccessStatusCode)
+                for (var retries = 0; ; retries++)
                 {
-                    var content = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-                    throw new ServerError(response.StatusCode, ServerMessage(content), $"{method} {path}");
+                    attemptStarted = Stopwatch.GetTimestamp();
+                    TimeSpan delay;
+                    using (var request = new HttpRequestMessage(method, apiUrl + path) { Content = content() })
+                    {
+                        request.Headers.Add("apiKey", apiKey);
+                        request.Headers.Add("project", project);
+
+                        using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+                        if (retries >= MaxRetries || RetryDelay(response) is not TimeSpan retryDelay)
+                        {
+                            if (!response.IsSuccessStatusCode)
+                            {
+                                var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                                throw new ServerError(
+                                    response.StatusCode, ServerMessage(body), $"{method} {path}", request.Content is MultipartFormDataContent);
+                            }
+                            return await response.Content.ReadFromJsonAsync<T>(jsonOptions, cancellationToken).ConfigureAwait(false);
+                        }
+                        delay = retryDelay;
+                    }
+                    await Delay(delay, cancellationToken).ConfigureAwait(false);
                 }
-                return await response.Content.ReadFromJsonAsync<T>(jsonOptions, cancellationToken).ConfigureAwait(false);
             }
             catch (HttpRequestException ex)
             {
@@ -78,13 +127,29 @@ namespace VisualRegressionTracker
             }
             catch (TaskCanceledException ex) when (!cancellationToken.IsCancellationRequested)
             {
-                throw new VisualRegressionTrackerError($"{method} {path} timed out after {httpClient.Timeout}", ex);
+                // a connect timeout also surfaces as TaskCanceledException, but before HttpClient.Timeout elapses
+                throw new VisualRegressionTrackerError(
+                    httpClient.Timeout == Timeout.InfiniteTimeSpan || Stopwatch.GetElapsedTime(attemptStarted) < httpClient.Timeout
+                        ? $"{method} {path} could not connect to {apiUrl}: {ex.InnerException?.Message ?? ex.Message}"
+                        : $"{method} {path} timed out after {httpClient.Timeout}",
+                    ex);
             }
             catch (JsonException ex)
             {
                 throw new VisualRegressionTrackerError(
                     $"{method} {path} returned a response that is not from the VRT API; check that ApiUrl points to the API, not the web app", ex);
             }
+        }
+
+        private static TimeSpan? RetryDelay(HttpResponseMessage response)
+        {
+            var retryAfter = response.Headers.RetryAfter;
+            if (response.StatusCode != HttpStatusCode.ServiceUnavailable || retryAfter == null)
+            {
+                return null;
+            }
+            var delay = retryAfter.Delta ?? retryAfter.Date - DateTimeOffset.UtcNow ?? TimeSpan.Zero;
+            return TimeSpan.FromTicks(Math.Clamp(delay.Ticks, 0, MaxRetryDelay.Ticks));
         }
 
         private static string ServerMessage(string content)
