@@ -203,6 +203,7 @@ await vrt.Track("sdk-dotnet", screenshot);
 
 The `Release` workflow then tests and packs the SDK, publishes it to NuGet through
 [trusted publishing](https://learn.microsoft.com/nuget/nuget-org/trusted-publishing)
-and creates the GitHub release with that `CHANGELOG.md` section as its notes. It needs a trusted publishing policy on nuget.org for
-this repository, workflow `release.yml` and environment `nuget`, and the
-`NUGET_USER` repository variable holding the nuget.org user name that owns the policy.
+and creates the GitHub release with that `CHANGELOG.md` section as its notes. It needs
+a trusted publishing policy on nuget.org for this repository, workflow `release.yml`
+and environment `nuget`, and the `NUGET_USER` repository variable holding the
+nuget.org user name that owns the policy.
