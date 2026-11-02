@@ -210,6 +210,3 @@ publishes the GitHub release with the generated notes and the `.nupkg`. Nothing 
 It needs a trusted publishing policy on nuget.org for this repository, workflow `release.yml` and
 environment `nuget`, and the `NUGET_USER` repository variable holding the nuget.org user name that
 owns the policy.
-
-Release notes from 5.0.1 on are the [GitHub releases](https://github.com/Visual-Regression-Tracker/sdk-dotnet/releases);
-`CHANGELOG.md` covers 5.0.0.

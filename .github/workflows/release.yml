@@ -30,7 +30,7 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 24
-      - name: Tag and draft the GitHub release
+      - name: Build, tag and draft the GitHub release
         id: semantic-release
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -40,11 +40,6 @@ jobs:
           -p @semantic-release/exec@7.1.0
           -p conventional-changelog-conventionalcommits@10.4.1
           semantic-release
-      - name: Pack
-        if: steps.semantic-release.outputs.version
-        run: >
-          dotnet pack VisualRegressionTracker --configuration Release --output artifacts
-          -p:Version=${{ steps.semantic-release.outputs.version }}
       - uses: actions/upload-artifact@v7
         if: steps.semantic-release.outputs.version
         with:
@@ -82,14 +77,8 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v8
-        with:
-          name: package
-          path: artifacts
       - name: Publish the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.release.outputs.version }}
-        run: |
-          gh release upload "$VERSION" artifacts/*.nupkg --repo "$GITHUB_REPOSITORY" --clobber
-          gh release edit "$VERSION" --repo "$GITHUB_REPOSITORY" --draft=false
+        run: gh release edit "$VERSION" --repo "$GITHUB_REPOSITORY" --draft=false
