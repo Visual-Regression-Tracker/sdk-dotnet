@@ -8,9 +8,9 @@ using Xunit;
 
 namespace VisualRegressionTracker.Tests
 {
-    [Collection(nameof(ConsoleCollection))]
     public class VisualRegressionTrackerTests
     {
+        const string RunUrl = "http://frontend/project-1?buildId=build-1&testId=run-1";
         const string BuildJson = @"{
             ""id"":""build-1"",
             ""ciBuildId"":""build id"",
@@ -74,7 +74,7 @@ namespace VisualRegressionTracker.Tests
                 ""merge"":false,
                 ""vlmDescription"":null,
                 ""pixelMisMatchCount"":10,
-                ""url"":""http://frontend/project-1?buildId=build-1&testId=run-1""
+                ""url"":""{RunUrl}""
             }}";
         }
 
@@ -307,7 +307,7 @@ namespace VisualRegressionTracker.Tests
         {
             var result = await TrackWithStatus("ok");
 
-            Assert.Equal("http://frontend/project-1?buildId=build-1&testId=run-1", result.Url);
+            Assert.Equal(RunUrl, result.Url);
             Assert.Equal("http://localhost:4200/images/image.png", result.ImageUrl);
             Assert.Equal("http://localhost:4200/images/diff.png", result.DiffUrl);
             Assert.Equal("http://localhost:4200/images/baseline.png", result.BaselineUrl);
@@ -333,8 +333,8 @@ namespace VisualRegressionTracker.Tests
         }
 
         [Theory]
-        [InlineData("new", "No baseline: http://frontend/project-1?buildId=build-1&testId=run-1")]
-        [InlineData("unresolved", "Difference found: http://frontend/project-1?buildId=build-1&testId=run-1")]
+        [InlineData("new", "No baseline: " + RunUrl)]
+        [InlineData("unresolved", "Difference found: " + RunUrl)]
         public async Task Track_ThrowsOnNewAndUnresolved(string status, string expectedMessage)
         {
             var ex = await Assert.ThrowsAsync<VisualRegressionTrackerError>(() => TrackWithStatus(status));
@@ -363,8 +363,8 @@ namespace VisualRegressionTracker.Tests
         }
 
         [Theory]
-        [InlineData("new", TestRunStatus.New, "No baseline: http://frontend/project-1?buildId=build-1&testId=run-1")]
-        [InlineData("unresolved", TestRunStatus.Unresolved, "Difference found: http://frontend/project-1?buildId=build-1&testId=run-1")]
+        [InlineData("new", TestRunStatus.New, "No baseline: " + RunUrl)]
+        [InlineData("unresolved", TestRunStatus.Unresolved, "Difference found: " + RunUrl)]
         public async Task Track_SoftAssertLogsInsteadOfThrowing(string status, TestRunStatus expected, string expectedLog)
         {
             config.EnableSoftAssert = true;
@@ -446,6 +446,17 @@ namespace VisualRegressionTracker.Tests
         }
 
         [Fact]
+        public async Task Track_SendsBase64WithoutEscaping()
+        {
+            await StartBuild();
+            handler.Respond(HttpStatusCode.Created, TestRunJson("ok"));
+
+            await vrt.Track("image name", new byte[] { 0xfb, 0xff, 0xbf });
+
+            Assert.Contains(@"""imageBase64"":""+/+/""", handler.LastRequest.Body);
+        }
+
+        [Fact]
         public async Task Track_Array()
         {
             await StartBuild();
@@ -455,10 +466,5 @@ namespace VisualRegressionTracker.Tests
 
             Assert.Contains(@"""imageBase64"":""AAECAwQFBgcICQ==""", handler.LastRequest.Body);
         }
-    }
-
-    [CollectionDefinition(nameof(ConsoleCollection), DisableParallelization = true)]
-    public class ConsoleCollection
-    {
     }
 }

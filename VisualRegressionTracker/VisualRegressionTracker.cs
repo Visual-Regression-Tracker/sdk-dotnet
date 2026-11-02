@@ -88,9 +88,7 @@ namespace VisualRegressionTracker
 
         protected async ValueTask Stop(CancellationToken? cancellationToken)
         {
-            if (!IsStarted) {
-                throw new VisualRegressionTrackerError("Visual Regression Tracker has not been started");
-            }
+            EnsureStarted();
 
             await client.StopBuild(buildId, cancellationToken ?? CancellationToken.None).ConfigureAwait(false);
 
@@ -111,9 +109,7 @@ namespace VisualRegressionTracker
             string comment = null,
             IEnumerable<IgnoreAreaDto> ignoreAreas = null)
         {
-            if (!IsStarted) {
-                throw new VisualRegressionTrackerError("Visual Regression Tracker has not been started");
-            }
+            EnsureStarted();
 
             var response = await client.PostTestRun(
                 new CreateTestRequestDto
@@ -202,6 +198,13 @@ namespace VisualRegressionTracker
                 cancellationToken,
                 os, browser, viewport, device, customTags, diffTollerancePercent, comment, ignoreAreas
             );
+        }
+
+        private void EnsureStarted()
+        {
+            if (!IsStarted) {
+                throw new VisualRegressionTrackerError("Visual Regression Tracker has not been started");
+            }
         }
 
         private static TestRunStatus ParseStatus(string status)

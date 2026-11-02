@@ -1,5 +1,8 @@
+using System;
 using System.Net.Http;
-using System.Text;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
@@ -11,7 +14,9 @@ namespace VisualRegressionTracker
     {
         private static readonly JsonSerializerOptions jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web)
         {
-            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+            // the default encoder escapes every '+' of a base64 image as \u002B
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
         };
 
         private readonly HttpClient httpClient;
@@ -51,26 +56,23 @@ namespace VisualRegressionTracker
         {
             using var request = new HttpRequestMessage(method, apiUrl + path)
             {
-                Content = new StringContent(JsonSerializer.Serialize(body, jsonOptions), Encoding.UTF8, "application/json")
+                Content = new ByteArrayContent(JsonSerializer.SerializeToUtf8Bytes(body, jsonOptions))
             };
+            request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json") { CharSet = "utf-8" };
             request.Headers.Add("apiKey", apiKey);
             request.Headers.Add("project", project);
 
             try
             {
                 using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-                var content = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
                 if (!response.IsSuccessStatusCode)
                 {
+                    var content = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
                     throw new ServerError(response.StatusCode, ServerMessage(content), $"{method} {path}");
                 }
-                return JsonSerializer.Deserialize<T>(content, jsonOptions);
+                return await response.Content.ReadFromJsonAsync<T>(jsonOptions, cancellationToken).ConfigureAwait(false);
             }
-            catch (HttpRequestException ex)
-            {
-                throw new VisualRegressionTrackerError(ex);
-            }
-            catch (JsonException ex)
+            catch (Exception ex) when (ex is HttpRequestException or JsonException)
             {
                 throw new VisualRegressionTrackerError(ex);
             }

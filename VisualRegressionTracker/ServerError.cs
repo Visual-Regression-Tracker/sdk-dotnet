@@ -21,7 +21,7 @@ namespace VisualRegressionTracker
                 HttpStatusCode.RequestEntityTooLarge =>
                     ". The request is above the server's JSON body limit (BODY_PARSER_JSON_LIMIT): raise it on the server or send a smaller image.",
                 HttpStatusCode.UnprocessableEntity =>
-                    ". The image has more pixels than the server allows (MAX_IMAGE_PIXELS): raise it on the server or send a smaller image.",
+                    ". Raise MAX_IMAGE_PIXELS on the server or send a smaller image.",
                 _ => ""
             };
         }
