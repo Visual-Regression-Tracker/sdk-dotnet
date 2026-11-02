@@ -1,8 +1,8 @@
 #! /usr/bin/env bash
 
-rm -rf tests/*/TestResults
-dotnet test --collect:"XPlat Code Coverage"
-dotnet reportgenerator "-reports:tests/**/coverage.cobertura.xml" -targetdir:htmlcov -verbosity:Warning
+rm -rf TestResults
+dotnet test --coverlet --coverlet-output-format cobertura --results-directory "$PWD/TestResults"
+dotnet reportgenerator "-reports:TestResults/coverage.cobertura.*.xml" -targetdir:htmlcov -verbosity:Warning
 
 # codacy reporter doesn't support globs, so copy it to known location
-cp tests/VisualRegressionTracker.Tests/TestResults/*/coverage.cobertura.xml ./coverage.xml
+cp TestResults/coverage.cobertura.*.xml ./coverage.xml

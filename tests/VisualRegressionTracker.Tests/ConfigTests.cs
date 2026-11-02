@@ -4,7 +4,7 @@ using System.IO;
 using System.Reflection;
 using FizzWare.NBuilder;
 using Xunit;
-using Xunit.Sdk;
+using Xunit.v3;
 using Newtonsoft.Json;
 
 namespace VisualRegressionTracker.Tests
@@ -168,7 +168,7 @@ namespace VisualRegressionTracker.Tests
     {
         private string oldCurrentDir;
 
-        public override void Before(MethodInfo methodUnderTest)
+        public override void Before(MethodInfo methodUnderTest, IXunitTest test)
         {
             oldCurrentDir = Directory.GetCurrentDirectory();
             var newDir = $"{methodUnderTest.DeclaringType.Name}.{methodUnderTest.Name}";
@@ -181,7 +181,7 @@ namespace VisualRegressionTracker.Tests
             Directory.SetCurrentDirectory(newDir);
         }
 
-        public override void After(MethodInfo methodUnderTest)
+        public override void After(MethodInfo methodUnderTest, IXunitTest test)
         {
             Directory.SetCurrentDirectory(oldCurrentDir);
         }
@@ -189,7 +189,7 @@ namespace VisualRegressionTracker.Tests
 
     public class ClearEnvironment : BeforeAfterTestAttribute
     {
-        public override void Before(MethodInfo methodUnderTest)
+        public override void Before(MethodInfo methodUnderTest, IXunitTest test)
         {
             Environment.SetEnvironmentVariable("VRT_APIURL", null);
             Environment.SetEnvironmentVariable("VRT_CIBUILDID", null);
@@ -199,9 +199,9 @@ namespace VisualRegressionTracker.Tests
             Environment.SetEnvironmentVariable("VRT_ENABLESOFTASSERT", null);
         }
 
-        public override void After(MethodInfo methodUnderTest)
+        public override void After(MethodInfo methodUnderTest, IXunitTest test)
         {
-            Before(methodUnderTest);
+            Before(methodUnderTest, test);
         }
     }
 }
