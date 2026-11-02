@@ -530,15 +530,15 @@ namespace VisualRegressionTracker.Tests
         {
             using var tracker = new VisualRegressionTracker(config);
 
-            Assert.Equal(TimeSpan.FromSeconds(360), tracker.HttpTimeout);
+            Assert.Equal(TimeSpan.FromSeconds(360), tracker.OwnHttpClient.Timeout);
         }
 
         [Fact]
-        public void InjectedHttpClient_KeepsItsTimeout()
+        public void InjectedHttpClient_IsNotOwned()
         {
-            using var tracker = new VisualRegressionTracker(config, new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(5) });
+            using var tracker = new VisualRegressionTracker(config, new HttpClient(handler));
 
-            Assert.Equal(TimeSpan.FromSeconds(5), tracker.HttpTimeout);
+            Assert.Null(tracker.OwnHttpClient);
         }
 
         [Fact]

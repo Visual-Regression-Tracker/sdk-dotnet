@@ -28,7 +28,7 @@ namespace VisualRegressionTracker
 
         private readonly Config config;
         private readonly ApiClient client;
-        private readonly HttpClient ownHttpClient;
+        internal readonly HttpClient OwnHttpClient;
         private string buildId;
         private string projectId;
 
@@ -45,23 +45,19 @@ namespace VisualRegressionTracker
             this.config = config ?? Config.GetDefault();
             this.config.CheckComplete();
 
-            if (httpClient == null) {
-                // the server compares the images inside POST /test-runs, and a VLM check can take 300 s
-                ownHttpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(360) };
-            }
+            // the server compares the images inside POST /test-runs, and a VLM check can take 300 s
+            OwnHttpClient = httpClient == null ? new HttpClient { Timeout = TimeSpan.FromSeconds(360) } : null;
 
             client = new ApiClient(
-                httpClient ?? ownHttpClient,
+                httpClient ?? OwnHttpClient,
                 this.config.ApiUrl,
                 this.config.ApiKey,
                 this.config.Project);
         }
 
-        internal TimeSpan HttpTimeout => client.Timeout;
-
         public void Dispose()
         {
-            ownHttpClient?.Dispose();
+            OwnHttpClient?.Dispose();
         }
 
         public bool IsStarted => buildId != null && projectId != null;

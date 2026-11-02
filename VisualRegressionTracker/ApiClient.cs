@@ -32,8 +32,6 @@ namespace VisualRegressionTracker
             this.project = project;
         }
 
-        public TimeSpan Timeout => httpClient.Timeout;
-
         public string ImageUrl(string imageName)
         {
             return string.IsNullOrEmpty(imageName) ? null : $"{apiUrl}/images/{imageName}";

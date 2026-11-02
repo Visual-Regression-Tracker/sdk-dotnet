@@ -1,6 +1,5 @@
 using System;
 using System.IO;
-using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -137,7 +136,8 @@ namespace VisualRegressionTracker
                     JsonTokenType.True => true,
                     JsonTokenType.False => false,
                     JsonTokenType.Number => reader.GetDouble() != 0,
-                    _ => IsTrue(reader.GetString())
+                    JsonTokenType.String => IsTrue(reader.GetString()),
+                    _ => throw new JsonException($"Expected a boolean, got {reader.TokenType}.")
                 };
             }
 
@@ -149,7 +149,7 @@ namespace VisualRegressionTracker
 
         private static bool IsTrue(string value)
         {
-            return new[] {"true", "1"}.Contains(value.ToLowerInvariant());
+            return value == "1" || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
         }
 
         private static string determine_config_path()

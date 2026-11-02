@@ -86,9 +86,22 @@ namespace VisualRegressionTracker.Tests
         [MoveCurrentDirectory]
         public void FromFile_AcceptsBooleanLikeEnableSoftAssert(string json, bool expected)
         {
-            File.WriteAllText("vrt.json", $@"{{""enableSoftAssert"": {json}}}");
+            File.WriteAllText(Config.DefaultPath, $@"{{""enableSoftAssert"": {json}}}");
 
-            Assert.Equal(expected, Config.FromFile("vrt.json").EnableSoftAssert);
+            Assert.Equal(expected, Config.FromFile(Config.DefaultPath).EnableSoftAssert);
+        }
+
+        [Theory]
+        [InlineData("null")]
+        [InlineData("{}")]
+        [MoveCurrentDirectory]
+        public void FromFile_ReportsInvalidEnableSoftAssert(string json)
+        {
+            File.WriteAllText(Config.DefaultPath, $@"{{""enableSoftAssert"": {json}}}");
+
+            var ex = Assert.Throws<VisualRegressionTrackerError>(() => Config.FromFile(Config.DefaultPath));
+
+            Assert.Contains(Config.DefaultPath, ex.Message);
         }
 
         [Fact]
