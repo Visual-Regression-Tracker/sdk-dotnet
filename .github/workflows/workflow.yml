@@ -24,6 +24,7 @@ jobs:
       - name: Restore tools
         run: dotnet tool restore
       - name: Test
+        shell: bash
         run: bin/test.sh
       - name: Codacy Coverage Reporter
         if: ${{ matrix.os == 'ubuntu-latest' }}

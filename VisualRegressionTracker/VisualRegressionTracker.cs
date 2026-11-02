@@ -168,7 +168,7 @@ namespace VisualRegressionTracker
             string comment = null,
             IEnumerable<IgnoreAreaDto> ignoreAreas = null)
         {
-            using var buffer = new MemoryStream();
+            using var buffer = new MemoryStream(image.CanSeek ? (int)(image.Length - image.Position) : 0);
             await image.CopyToAsync(buffer, cancellationToken ?? CancellationToken.None).ConfigureAwait(false);
 
             return await Track(

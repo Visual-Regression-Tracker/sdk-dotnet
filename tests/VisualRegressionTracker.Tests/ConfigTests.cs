@@ -75,6 +75,15 @@ namespace VisualRegressionTracker.Tests
             Assert.True(actual.EnableSoftAssert);
         }
 
+        [Fact]
+        [MoveCurrentDirectory]
+        public void FromFile_AcceptsNumericCiBuildId()
+        {
+            File.WriteAllText("vrt.json", @"{""ciBuildId"": 1234}");
+
+            Assert.Equal("1234", Config.FromFile("vrt.json").CiBuildId);
+        }
+
         [Theory]
         [MemberData(nameof(Configs))]
         [ClearEnvironment]
@@ -124,7 +133,9 @@ namespace VisualRegressionTracker.Tests
         [ClearEnvironment]
         public void GetDefault_None()
         {
-            Assert.Throws<MissingConfigurationError>(() => Config.GetDefault());
+            var ex = Assert.Throws<MissingConfigurationError>(() => Config.GetDefault());
+
+            Assert.Contains("specified. Please provide", ex.Message);
         }
 
         [Theory]

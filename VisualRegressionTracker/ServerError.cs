@@ -5,7 +5,7 @@ namespace VisualRegressionTracker
     public class ServerError : VisualRegressionTrackerError
     {
         public ServerError(HttpStatusCode statusCode, string serverMessage, string request)
-            : base($"{request} failed with {(int)statusCode}: {serverMessage}{Hint(statusCode)}")
+            : base($"{request} failed with {(int)statusCode}{(string.IsNullOrEmpty(serverMessage) ? "" : $": {serverMessage}")}{Hint(statusCode)}")
         {
             StatusCode = statusCode;
             ServerMessage = serverMessage;

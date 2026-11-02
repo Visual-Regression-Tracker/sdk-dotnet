@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -12,7 +13,8 @@ namespace VisualRegressionTracker
         {
             PropertyNameCaseInsensitive = true,
             ReadCommentHandling = JsonCommentHandling.Skip,
-            AllowTrailingCommas = true
+            AllowTrailingCommas = true,
+            Converters = { new StringOrNumberConverter() }
         };
         public static readonly string DefaultPath = "vrt.json";
 
@@ -73,7 +75,7 @@ namespace VisualRegressionTracker
             {
                 throw new MissingConfigurationError(
                     ex.FieldName,
-                    $"Incomplete configuration, {ex.FieldName} was not specified."
+                    $"Incomplete configuration, {ex.FieldName} was not specified. "
                     + $"Please provide via the constructor, a config file '{DefaultPath}', or environment variables.");
             }
 
@@ -102,6 +104,21 @@ namespace VisualRegressionTracker
             var value = Environment.GetEnvironmentVariable(name);
             if (!string.IsNullOrEmpty(value)) {
                 action(value);
+            }
+        }
+
+        private sealed class StringOrNumberConverter : JsonConverter<string>
+        {
+            public override string Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+            {
+                return reader.TokenType == JsonTokenType.Number
+                    ? Encoding.UTF8.GetString(reader.ValueSpan)
+                    : reader.GetString();
+            }
+
+            public override void Write(Utf8JsonWriter writer, string value, JsonSerializerOptions options)
+            {
+                writer.WriteStringValue(value);
             }
         }
 

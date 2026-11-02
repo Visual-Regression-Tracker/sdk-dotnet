@@ -424,6 +424,51 @@ namespace VisualRegressionTracker.Tests
         }
 
         [Fact]
+        public async Task Track_EmptyErrorBodyEndsMessageAtStatus()
+        {
+            await StartBuild();
+            handler.Respond(HttpStatusCode.BadGateway, "", "text/plain");
+
+            var ex = await Assert.ThrowsAsync<ServerError>(() => vrt.Track("image name", "aW1hZ2U="));
+
+            Assert.Equal("POST /test-runs failed with 502", ex.Message);
+        }
+
+        [Fact]
+        public async Task Track_WrapsTimeout()
+        {
+            await StartBuild();
+            handler.Throw(new TaskCanceledException("timed out", new TimeoutException()));
+
+            var ex = await Assert.ThrowsAsync<VisualRegressionTrackerError>(() => vrt.Track("image name", "aW1hZ2U="));
+
+            Assert.Contains("POST /test-runs", ex.Message);
+            Assert.IsType<TaskCanceledException>(ex.InnerException);
+        }
+
+        [Fact]
+        public async Task Track_PassesCallerCancellationThrough()
+        {
+            await StartBuild();
+            using var cancelled = new CancellationTokenSource();
+            cancelled.Cancel();
+            handler.Throw(new TaskCanceledException("cancelled", null, cancelled.Token));
+
+            await Assert.ThrowsAsync<TaskCanceledException>(() => vrt.Track("image name", "aW1hZ2U=", cancelled.Token));
+        }
+
+        [Fact]
+        public async Task Start_ExplainsNonJsonSuccessResponse()
+        {
+            handler.Respond(HttpStatusCode.OK, "<html>Visual Regression Tracker</html>", "text/html");
+
+            var ex = await Assert.ThrowsAsync<VisualRegressionTrackerError>(() => vrt.Start());
+
+            Assert.Contains("POST /builds", ex.Message);
+            Assert.Contains("ApiUrl", ex.Message);
+        }
+
+        [Fact]
         public async Task Track_WrapsNetworkErrors()
         {
             await StartBuild();

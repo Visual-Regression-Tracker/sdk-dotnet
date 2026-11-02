@@ -72,9 +72,18 @@ namespace VisualRegressionTracker
                 }
                 return await response.Content.ReadFromJsonAsync<T>(jsonOptions, cancellationToken).ConfigureAwait(false);
             }
-            catch (Exception ex) when (ex is HttpRequestException or JsonException)
+            catch (HttpRequestException ex)
             {
                 throw new VisualRegressionTrackerError(ex);
+            }
+            catch (TaskCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+            {
+                throw new VisualRegressionTrackerError($"{method} {path} timed out after {httpClient.Timeout}", ex);
+            }
+            catch (JsonException ex)
+            {
+                throw new VisualRegressionTrackerError(
+                    $"{method} {path} returned a response that is not from the VRT API; check that ApiUrl points to the API, not the web app", ex);
             }
         }
 
