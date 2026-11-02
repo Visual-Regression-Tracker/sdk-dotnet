@@ -2,23 +2,30 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  build:
+  test:
     strategy:
       fail-fast: false
       matrix:
-        os: ['windows-latest', 'ubuntu-latest', 'macos-latest']
+        os: [ubuntu-latest, windows-latest, macos-latest]
 
     runs-on: ${{ matrix.os }}
+    env:
+      HAS_CODACY_TOKEN: ${{ secrets.CODACY_TOKEN != '' }}
 
     steps:
       - uses: actions/checkout@v7
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v6
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
       - name: Restore tools
@@ -26,9 +33,10 @@ jobs:
       - name: Test
         shell: bash
         run: bin/test.sh
-      - name: Codacy Coverage Reporter
-        if: ${{ matrix.os == 'ubuntu-latest' }}
-        uses: codacy/codacy-coverage-reporter-action@master
+      # secrets are not passed to pull requests from forks
+      - name: Upload coverage to Codacy
+        if: matrix.os == 'ubuntu-latest' && env.HAS_CODACY_TOKEN == 'true'
+        uses: codacy/codacy-coverage-reporter-action@v1.3.0
         with:
           project-token: ${{ secrets.CODACY_TOKEN }}
-          coverage-reports: 'coverage.xml'
+          coverage-reports: coverage.xml

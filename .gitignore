@@ -10,3 +10,4 @@ htmlcov
 nuget_key.txt
 coverage.xml
 /.vs
+artifacts/

@@ -194,3 +194,16 @@ var vrt = new VisualRegressionTracker.VisualRegressionTracker();
 await using var cleanup = await vrt.Start();
 await vrt.Track("sdk-dotnet", screenshot);
 ```
+
+## Releasing
+
+1. Set `<Version>` in `VisualRegressionTracker/VisualRegressionTracker.csproj`, add a
+   `## <version>` section to `CHANGELOG.md` and merge both to `main`.
+2. Push a tag with the same version, e.g. `git tag 5.0.0 && git push origin 5.0.0`.
+
+The `Release` workflow then tests and packs the SDK, publishes it to NuGet through
+[trusted publishing](https://learn.microsoft.com/nuget/nuget-org/trusted-publishing)
+and creates the GitHub release with that `CHANGELOG.md` section as its notes. It needs
+a trusted publishing policy on nuget.org for this repository, workflow `release.yml`
+and environment `nuget`, and the `NUGET_USER` repository variable holding the
+nuget.org user name that owns the policy.
