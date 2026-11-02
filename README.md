@@ -102,7 +102,7 @@ server compares the images while it answers `Track`, and disposing the tracker d
 that client. A client you pass in keeps its own timeout and is left open.
 
 ```csharp
-using var vrt = new VisualRegressionTracker.VisualRegressionTracker(config, httpClient);
+using var vrt = new VisualRegressionTracker.VisualRegressionTracker(config);
 ```
 
 ```csharp
