@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Threading;
@@ -89,6 +92,24 @@ namespace VisualRegressionTracker.Tests
             await StartBuild();
             handler.Respond(HttpStatusCode.Created, TestRunJson(status));
             return await vrt.Track("image name", "aW1hZ2U=");
+        }
+
+        void AssertMultipartImage(byte[] expected)
+        {
+            var request = handler.LastRequest;
+            Assert.Equal(HttpMethod.Post, request.Method);
+            Assert.Equal("http://localhost:4200/test-runs/multipart", request.Url);
+            Assert.Equal("api key", request.ApiKey);
+            Assert.Equal("project", request.Project);
+            var image = request.Form["image"];
+            Assert.Equal(expected, image.Bytes);
+            Assert.Equal("image.png", image.FileName);
+            Assert.Equal("image/png", image.ContentType);
+        }
+
+        static string Value(RecordedRequest request, string name)
+        {
+            return request.Form.TryGetValue(name, out var part) ? part.Value : null;
         }
 
         [Fact]
@@ -355,11 +376,14 @@ namespace VisualRegressionTracker.Tests
         }
 
         [Fact]
-        public async Task Track_ToleratesUnknownStatus()
+        public async Task Track_ToleratesUnknownStatusWithWarning()
         {
-            var result = await TrackWithStatus("somethingNew");
+            TestRunResult result = null;
+            var log = await CaptureStderr(async () => result = await TrackWithStatus("somethingNew"));
 
             Assert.Equal(TestRunStatus.Unknown, result.Status);
+            Assert.Contains("somethingNew", log);
+            Assert.Contains(RunUrl, log);
         }
 
         [Theory]
@@ -368,21 +392,12 @@ namespace VisualRegressionTracker.Tests
         public async Task Track_SoftAssertLogsInsteadOfThrowing(string status, TestRunStatus expected, string expectedLog)
         {
             config.EnableSoftAssert = true;
-            var log = new StringWriter();
-            var stderr = Console.Error;
-            Console.SetError(log);
-            try
-            {
-                var result = await TrackWithStatus(status);
+            TestRunResult result = null;
 
-                Assert.Equal(expected, result.Status);
-            }
-            finally
-            {
-                Console.SetError(stderr);
-            }
+            var log = await CaptureStderr(async () => result = await TrackWithStatus(status));
 
-            Assert.Contains(expectedLog, log.ToString());
+            Assert.Equal(expected, result.Status);
+            Assert.Contains(expectedLog, log);
         }
 
         [Fact]
@@ -446,6 +461,34 @@ namespace VisualRegressionTracker.Tests
             Assert.IsType<TaskCanceledException>(ex.InnerException);
         }
 
+        [Theory]
+        [InlineData(100_000)]
+        [InlineData(-1)]
+        public async Task Start_ReportsConnectTimeout(int timeoutMilliseconds)
+        {
+            using var tracker = new VisualRegressionTracker(
+                config, new HttpClient(handler) { Timeout = TimeSpan.FromMilliseconds(timeoutMilliseconds) });
+            handler.Throw(new TaskCanceledException(
+                "The operation was canceled.",
+                new TimeoutException("A connection could not be established within the configured ConnectTimeout.")));
+
+            var ex = await Assert.ThrowsAsync<VisualRegressionTrackerError>(() => tracker.Start());
+
+            Assert.Equal(
+                "POST /builds could not connect to http://localhost:4200: A connection could not be established within the configured ConnectTimeout.",
+                ex.Message);
+        }
+
+        [Fact]
+        public async Task Start_ReportsResponseTimeout()
+        {
+            using var tracker = new VisualRegressionTracker(config, new HttpClient(new HangingHandler()) { Timeout = TimeSpan.FromMilliseconds(50) });
+
+            var ex = await Assert.ThrowsAsync<VisualRegressionTrackerError>(() => tracker.Start());
+
+            Assert.Equal("POST /builds timed out after 00:00:00.0500000", ex.Message);
+        }
+
         [Fact]
         public async Task Track_PassesCallerCancellationThrough()
         {
@@ -486,7 +529,7 @@ namespace VisualRegressionTracker.Tests
 
             await vrt.Track("image name", image);
 
-            Assert.Contains(@"""imageBase64"":""AAECAwQFBgcICQ==""", handler.LastRequest.Body);
+            AssertMultipartImage(new byte[] { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 });
             Assert.True(image.CanRead);
         }
 
@@ -496,7 +539,7 @@ namespace VisualRegressionTracker.Tests
             await StartBuild();
             handler.Respond(HttpStatusCode.Created, TestRunJson("ok"));
 
-            await vrt.Track("image name", new byte[] { 0xfb, 0xff, 0xbf });
+            await vrt.Track("image name", "+/+/");
 
             Assert.Contains(@"""imageBase64"":""+/+/""", handler.LastRequest.Body);
         }
@@ -510,7 +553,7 @@ namespace VisualRegressionTracker.Tests
 
             await vrt.Track("image name", image);
 
-            Assert.Contains(@"""imageBase64"":""AAECAwQFBgcICQ==""", handler.LastRequest.Body);
+            AssertMultipartImage(new byte[] { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 });
         }
 
         [Fact]
@@ -522,7 +565,261 @@ namespace VisualRegressionTracker.Tests
 
             await vrt.Track("image name", image);
 
-            Assert.Contains(@"""imageBase64"":""AAECAwQFBgcICQ==""", handler.LastRequest.Body);
+            AssertMultipartImage(new byte[] { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 });
+        }
+
+        [Fact]
+        public async Task Track_SendsSourceBranchAndMerge()
+        {
+            config.SourceBranch = "release";
+            await StartBuild();
+            handler.Respond(HttpStatusCode.Created, TestRunJson("ok"));
+
+            await vrt.Track("image name", "aW1hZ2U=", merge: true);
+
+            JsonAssert.Equal(
+                @"{
+                    ""name"":""image name"",
+                    ""imageBase64"":""aW1hZ2U="",
+                    ""buildId"":""build-1"",
+                    ""projectId"":""project-1"",
+                    ""branchName"":""branch name"",
+                    ""sourceBranch"":""release"",
+                    ""merge"":true
+                }",
+                handler.LastRequest.Body);
+        }
+
+        [Fact]
+        public async Task Track_SendsMergeFalse()
+        {
+            await StartBuild();
+            handler.Respond(HttpStatusCode.Created, TestRunJson("ok"));
+
+            await vrt.Track("image name", "aW1hZ2U=", merge: false);
+
+            Assert.Contains(@"""merge"":false", handler.LastRequest.Body);
+        }
+
+        [Fact]
+        public async Task Track_MultipartSendsAllFields()
+        {
+            config.SourceBranch = "release";
+            var culture = CultureInfo.CurrentCulture;
+            CultureInfo.CurrentCulture = new CultureInfo("de-DE");
+            await StartBuild();
+            handler.Respond(HttpStatusCode.Created, TestRunJson("ok"));
+            try
+            {
+                await vrt.Track(
+                    "image name",
+                    new byte[] { 1, 2, 3 },
+                    TestContext.Current.CancellationToken,
+                    os: "os",
+                    browser: "browser",
+                    viewport: "viewport",
+                    device: "device",
+                    customTags: "customTags",
+                    diffTollerancePercent: 1.5,
+                    comment: "testcomment",
+                    ignoreAreas: new[] { new IgnoreAreaDto { X = 1, Y = 2, Width = 3, Height = 4 } },
+                    merge: true);
+            }
+            finally
+            {
+                CultureInfo.CurrentCulture = culture;
+            }
+
+            AssertMultipartImage(new byte[] { 1, 2, 3 });
+            var fields = handler.LastRequest.Form.Where(part => part.Key != "image").ToDictionary(part => part.Key, part => part.Value.Value);
+            JsonAssert.Equal(@"[{""x"":1,""y"":2,""width"":3,""height"":4}]", fields["ignoreAreas"]);
+            fields.Remove("ignoreAreas");
+            Assert.Equal(
+                new Dictionary<string, string>
+                {
+                    ["name"] = "image name",
+                    ["buildId"] = "build-1",
+                    ["projectId"] = "project-1",
+                    ["branchName"] = "branch name",
+                    ["sourceBranch"] = "release",
+                    ["os"] = "os",
+                    ["browser"] = "browser",
+                    ["viewport"] = "viewport",
+                    ["device"] = "device",
+                    ["customTags"] = "customTags",
+                    ["diffTollerancePercent"] = "1.5",
+                    ["comment"] = "testcomment",
+                    ["merge"] = "true",
+                },
+                fields);
+        }
+
+        [Fact]
+        public async Task Track_MultipartSendsOnlyGivenFields()
+        {
+            await StartBuild();
+            handler.Respond(HttpStatusCode.Created, TestRunJson("ok"));
+
+            await vrt.Track("image name", new byte[] { 1, 2, 3 });
+
+            Assert.Equal(
+                new[] { "branchName", "buildId", "image", "name", "projectId" },
+                new SortedSet<string>(handler.LastRequest.Form.Keys, StringComparer.Ordinal));
+        }
+
+        [Fact]
+        public async Task Track_File()
+        {
+            var path = Path.GetTempFileName();
+            File.WriteAllBytes(path, new byte[] { 4, 5, 6 });
+            await StartBuild();
+            handler.Respond(HttpStatusCode.Created, TestRunJson("ok"));
+            try
+            {
+                await vrt.Track("image name", new FileInfo(path), merge: false);
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+
+            AssertMultipartImage(new byte[] { 4, 5, 6 });
+            Assert.Equal("false", Value(handler.LastRequest, "merge"));
+        }
+
+        [Fact]
+        public async Task Track_MultipartReportsFileTooLarge()
+        {
+            await StartBuild();
+            handler.Respond(HttpStatusCode.RequestEntityTooLarge, string.Format(ErrorJson, 413, "test-runs/multipart", "File too large"));
+
+            var ex = await Assert.ThrowsAsync<ServerError>(() => vrt.Track("image name", new byte[] { 1 }));
+
+            Assert.Equal("File too large", ex.ServerMessage);
+            Assert.Contains("MULTIPART_FILE_SIZE_LIMIT", ex.Message);
+        }
+
+        [Fact]
+        public async Task Track_RetriesServiceUnavailableAfterRetryAfter()
+        {
+            var delays = RecordDelays();
+            await StartBuild();
+            RespondBusy("5");
+            handler.Respond(HttpStatusCode.Created, TestRunJson("ok"));
+
+            var result = await vrt.Track("image name", new byte[] { 1, 2, 3 });
+
+            Assert.Equal(TestRunStatus.Ok, result.Status);
+            Assert.Equal(new[] { TimeSpan.FromSeconds(5) }, delays);
+            Assert.Equal(3, handler.Requests.Count);
+            Assert.Equal(new byte[] { 1, 2, 3 }, handler.Requests[1].Form["image"].Bytes);
+            AssertMultipartImage(new byte[] { 1, 2, 3 });
+        }
+
+        [Fact]
+        public async Task Start_RetriesServiceUnavailableAfterRetryAfter()
+        {
+            var delays = RecordDelays();
+            RespondBusy("1", "builds");
+            handler.Respond(HttpStatusCode.Created, BuildJson);
+
+            await vrt.Start();
+
+            Assert.Equal("build-1", vrt.BuildId);
+            Assert.Equal(new[] { TimeSpan.FromSeconds(1) }, delays);
+            JsonAssert.Equal(handler.Requests[0].Body, handler.Requests[1].Body);
+        }
+
+        [Fact]
+        public async Task Track_GivesUpAfterThreeRetries()
+        {
+            var delays = RecordDelays();
+            await StartBuild();
+            for (var i = 0; i < 4; i++)
+            {
+                RespondBusy("5");
+            }
+
+            var ex = await Assert.ThrowsAsync<ServerError>(() => vrt.Track("image name", "aW1hZ2U="));
+
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, ex.StatusCode);
+            Assert.Equal("Image diff queue is full (100 jobs)", ex.ServerMessage);
+            Assert.Equal(3, delays.Count);
+            Assert.Equal(5, handler.Requests.Count);
+        }
+
+        [Fact]
+        public async Task Track_DoesNotRetryServiceUnavailableWithoutRetryAfter()
+        {
+            var delays = RecordDelays();
+            await StartBuild();
+            RespondBusy(null);
+
+            var ex = await Assert.ThrowsAsync<ServerError>(() => vrt.Track("image name", "aW1hZ2U="));
+
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, ex.StatusCode);
+            Assert.Empty(delays);
+        }
+
+        [Fact]
+        public async Task Track_WaitsAtMostAMinuteForRetryAfter()
+        {
+            var delays = RecordDelays();
+            await StartBuild();
+            RespondBusy("3600");
+            handler.Respond(HttpStatusCode.Created, TestRunJson("ok"));
+
+            await vrt.Track("image name", "aW1hZ2U=");
+
+            Assert.Equal(new[] { TimeSpan.FromSeconds(60) }, delays);
+        }
+
+        [Fact]
+        public async Task Track_ReadsRetryAfterDate()
+        {
+            var delays = RecordDelays();
+            await StartBuild();
+            RespondBusy(DateTimeOffset.UtcNow.AddSeconds(-30).ToString("r"));
+            handler.Respond(HttpStatusCode.Created, TestRunJson("ok"));
+
+            await vrt.Track("image name", "aW1hZ2U=");
+
+            Assert.Equal(new[] { TimeSpan.Zero }, delays);
+        }
+
+        void RespondBusy(string retryAfter, string path = "test-runs")
+        {
+            handler.Respond(
+                HttpStatusCode.ServiceUnavailable,
+                string.Format(ErrorJson, 503, path, "Image diff queue is full (100 jobs)"),
+                retryAfter: retryAfter);
+        }
+
+        static async Task<string> CaptureStderr(Func<Task> action)
+        {
+            var log = new StringWriter();
+            var stderr = Console.Error;
+            Console.SetError(log);
+            try
+            {
+                await action();
+            }
+            finally
+            {
+                Console.SetError(stderr);
+            }
+            return log.ToString();
+        }
+
+        List<TimeSpan> RecordDelays()
+        {
+            var delays = new List<TimeSpan>();
+            vrt.Client.Delay = (delay, _) =>
+            {
+                delays.Add(delay);
+                return Task.CompletedTask;
+            };
+            return delays;
         }
 
         [Fact]
@@ -531,6 +828,25 @@ namespace VisualRegressionTracker.Tests
             using var tracker = new VisualRegressionTracker(config);
 
             Assert.Equal(TimeSpan.FromSeconds(360), tracker.OwnHttpClient.Timeout);
+        }
+
+        [Theory]
+        [InlineData(30, 30_000)]
+        [InlineData(0, -1)]
+        public void OwnHttpClient_UsesConfiguredTimeoutWithZeroAsNoLimit(int seconds, int expectedMilliseconds)
+        {
+            config.HttpTimeoutInSeconds = seconds;
+            using var tracker = new VisualRegressionTracker(config);
+
+            Assert.Equal(TimeSpan.FromMilliseconds(expectedMilliseconds), tracker.OwnHttpClient.Timeout);
+        }
+
+        [Fact]
+        public void OwnHttpClient_ConnectTimeoutIsTenSeconds()
+        {
+            using var httpHandler = VisualRegressionTracker.CreateHttpHandler();
+
+            Assert.Equal(TimeSpan.FromSeconds(10), httpHandler.ConnectTimeout);
         }
 
         [Fact]
@@ -571,7 +887,7 @@ namespace VisualRegressionTracker.Tests
 
             await vrt.Track("image name", new byte[] { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 });
 
-            Assert.Contains(@"""imageBase64"":""AAECAwQFBgcICQ==""", handler.LastRequest.Body);
+            AssertMultipartImage(new byte[] { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 });
         }
     }
 }

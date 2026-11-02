@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
 using System.Net.Http;
 using System.Threading;
@@ -27,8 +28,8 @@ namespace VisualRegressionTracker
         }
 
         private readonly Config config;
-        private readonly ApiClient client;
         internal readonly HttpClient OwnHttpClient;
+        internal ApiClient Client { get; }
         private string buildId;
         private string projectId;
 
@@ -45,14 +46,25 @@ namespace VisualRegressionTracker
             this.config = config ?? Config.GetDefault();
             this.config.CheckComplete();
 
-            // the server compares the images inside POST /test-runs, and a VLM check can take 300 s
-            OwnHttpClient = httpClient == null ? new HttpClient { Timeout = TimeSpan.FromSeconds(360) } : null;
+            OwnHttpClient = httpClient == null
+                ? new HttpClient(CreateHttpHandler())
+                {
+                    Timeout = this.config.HttpTimeoutInSeconds == 0
+                        ? Timeout.InfiniteTimeSpan
+                        : TimeSpan.FromSeconds(this.config.HttpTimeoutInSeconds)
+                }
+                : null;
 
-            client = new ApiClient(
+            Client = new ApiClient(
                 httpClient ?? OwnHttpClient,
                 this.config.ApiUrl,
                 this.config.ApiKey,
                 this.config.Project);
+        }
+
+        internal static SocketsHttpHandler CreateHttpHandler()
+        {
+            return new SocketsHttpHandler { ConnectTimeout = TimeSpan.FromSeconds(10) };
         }
 
         public void Dispose()
@@ -76,7 +88,7 @@ namespace VisualRegressionTracker
 
         protected async Task<IAsyncDisposable> Start(CancellationToken? cancellationToken)
         {
-            var build = await client.CreateBuild(
+            var build = await Client.CreateBuild(
                 new CreateBuildDto(config.BranchName, config.Project, config.CiBuildId),
                 cancellationToken ?? CancellationToken.None).ConfigureAwait(false);
 
@@ -99,7 +111,7 @@ namespace VisualRegressionTracker
         {
             EnsureStarted();
 
-            await client.StopBuild(buildId, cancellationToken ?? CancellationToken.None).ConfigureAwait(false);
+            await Client.StopBuild(buildId, cancellationToken ?? CancellationToken.None).ConfigureAwait(false);
 
             buildId = null;
             projectId = null;
@@ -116,36 +128,165 @@ namespace VisualRegressionTracker
             string customTags = null,
             double? diffTollerancePercent = null,
             string comment = null,
-            IEnumerable<IgnoreAreaDto> ignoreAreas = null)
+            IEnumerable<IgnoreAreaDto> ignoreAreas = null,
+            bool? merge = null)
+        {
+            var testRun = TestRun(name, os, browser, viewport, device, customTags, diffTollerancePercent, comment, ignoreAreas, merge) with { ImageBase64 = imageBase64 };
+            return Result(await Client.PostTestRun(testRun, cancellationToken ?? CancellationToken.None).ConfigureAwait(false));
+        }
+
+        public async Task<TestRunResult> Track(
+            string name,
+            Stream image,
+            CancellationToken? cancellationToken = null,
+            string os = null,
+            string browser = null,
+            string viewport = null,
+            string device = null,
+            string customTags = null,
+            double? diffTollerancePercent = null,
+            string comment = null,
+            IEnumerable<IgnoreAreaDto> ignoreAreas = null,
+            bool? merge = null)
+        {
+            using var buffer = new MemoryStream(image.CanSeek ? (int)(image.Length - image.Position) : 0);
+            await image.CopyToAsync(buffer, cancellationToken ?? CancellationToken.None).ConfigureAwait(false);
+
+            var testRun = TestRun(name, os, browser, viewport, device, customTags, diffTollerancePercent, comment, ignoreAreas, merge);
+            return Result(await Client.PostTestRunMultipart(
+                testRun, buffer.GetBuffer().AsMemory(0, (int)buffer.Length), cancellationToken ?? CancellationToken.None).ConfigureAwait(false));
+        }
+
+        public async Task<TestRunResult> Track(
+            string name,
+            byte[] image,
+            CancellationToken? cancellationToken = null,
+            string os = null,
+            string browser = null,
+            string viewport = null,
+            string device = null,
+            string customTags = null,
+            double? diffTollerancePercent = null,
+            string comment = null,
+            IEnumerable<IgnoreAreaDto> ignoreAreas = null,
+            bool? merge = null)
+        {
+            var testRun = TestRun(name, os, browser, viewport, device, customTags, diffTollerancePercent, comment, ignoreAreas, merge);
+            return Result(await Client.PostTestRunMultipart(testRun, image, cancellationToken ?? CancellationToken.None).ConfigureAwait(false));
+        }
+
+        public async Task<TestRunResult> Track(
+            string name,
+            FileInfo image,
+            CancellationToken? cancellationToken = null,
+            string os = null,
+            string browser = null,
+            string viewport = null,
+            string device = null,
+            string customTags = null,
+            double? diffTollerancePercent = null,
+            string comment = null,
+            IEnumerable<IgnoreAreaDto> ignoreAreas = null,
+            bool? merge = null)
+        {
+            var bytes = await File.ReadAllBytesAsync(image.FullName, cancellationToken ?? CancellationToken.None).ConfigureAwait(false);
+
+            return await Track(name, bytes, cancellationToken, os, browser, viewport, device, customTags, diffTollerancePercent, comment, ignoreAreas, merge).ConfigureAwait(false);
+        }
+
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public Task<TestRunResult> Track(
+            string name,
+            string imageBase64,
+            CancellationToken? cancellationToken,
+            string os,
+            string browser,
+            string viewport,
+            string device,
+            string customTags,
+            double? diffTollerancePercent,
+            string comment,
+            IEnumerable<IgnoreAreaDto> ignoreAreas)
+        {
+            return Track(name, imageBase64, cancellationToken, os, browser, viewport, device, customTags, diffTollerancePercent, comment, ignoreAreas, merge: null);
+        }
+
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public Task<TestRunResult> Track(
+            string name,
+            Stream image,
+            CancellationToken? cancellationToken,
+            string os,
+            string browser,
+            string viewport,
+            string device,
+            string customTags,
+            double? diffTollerancePercent,
+            string comment,
+            IEnumerable<IgnoreAreaDto> ignoreAreas)
+        {
+            return Track(name, image, cancellationToken, os, browser, viewport, device, customTags, diffTollerancePercent, comment, ignoreAreas, merge: null);
+        }
+
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public Task<TestRunResult> Track(
+            string name,
+            byte[] image,
+            CancellationToken? cancellationToken,
+            string os,
+            string browser,
+            string viewport,
+            string device,
+            string customTags,
+            double? diffTollerancePercent,
+            string comment,
+            IEnumerable<IgnoreAreaDto> ignoreAreas)
+        {
+            return Track(name, image, cancellationToken, os, browser, viewport, device, customTags, diffTollerancePercent, comment, ignoreAreas, merge: null);
+        }
+
+        private CreateTestRequestDto TestRun(
+            string name,
+            string os,
+            string browser,
+            string viewport,
+            string device,
+            string customTags,
+            double? diffTollerancePercent,
+            string comment,
+            IEnumerable<IgnoreAreaDto> ignoreAreas,
+            bool? merge)
         {
             EnsureStarted();
 
-            var response = await client.PostTestRun(
-                new CreateTestRequestDto
-                {
-                    Name = name,
-                    ImageBase64 = imageBase64,
-                    BuildId = buildId,
-                    ProjectId = projectId,
-                    BranchName = config.BranchName,
-                    Os = os,
-                    Browser = browser,
-                    Viewport = viewport,
-                    Device = device,
-                    CustomTags = customTags,
-                    DiffTollerancePercent = diffTollerancePercent,
-                    Comment = comment,
-                    IgnoreAreas = ignoreAreas
-                },
-                cancellationToken ?? CancellationToken.None).ConfigureAwait(false);
+            return new CreateTestRequestDto
+            {
+                Name = name,
+                BuildId = buildId,
+                ProjectId = projectId,
+                BranchName = config.BranchName,
+                SourceBranch = config.SourceBranch,
+                Os = os,
+                Browser = browser,
+                Viewport = viewport,
+                Device = device,
+                CustomTags = customTags,
+                DiffTollerancePercent = diffTollerancePercent,
+                Comment = comment,
+                IgnoreAreas = ignoreAreas,
+                Merge = merge
+            };
+        }
 
+        private TestRunResult Result(TestRunResultDto response)
+        {
             var result = new TestRunResult
             {
                 Status = ParseStatus(response.Status),
                 Url = response.Url,
-                ImageUrl = client.ImageUrl(response.ImageName),
-                DiffUrl = client.ImageUrl(response.DiffName),
-                BaselineUrl = client.ImageUrl(response.BaselineName),
+                ImageUrl = Client.ImageUrl(response.ImageName),
+                DiffUrl = Client.ImageUrl(response.DiffName),
+                BaselineUrl = Client.ImageUrl(response.BaselineName),
             };
 
             var failure = result.Status switch
@@ -160,53 +301,11 @@ namespace VisualRegressionTracker
                 }
                 Console.Error.WriteLine(failure);
             }
+            if (result.Status == TestRunStatus.Unknown) {
+                Console.Error.WriteLine($"Unknown status '{response.Status}', update the VisualRegressionTracker package: {result.Url}");
+            }
 
             return result;
-        }
-
-        public async Task<TestRunResult> Track(
-            string name,
-            Stream image,
-            CancellationToken? cancellationToken = null,
-            string os = null,
-            string browser = null,
-            string viewport = null,
-            string device = null,
-            string customTags = null,
-            double? diffTollerancePercent = null,
-            string comment = null,
-            IEnumerable<IgnoreAreaDto> ignoreAreas = null)
-        {
-            using var buffer = new MemoryStream(image.CanSeek ? (int)(image.Length - image.Position) : 0);
-            await image.CopyToAsync(buffer, cancellationToken ?? CancellationToken.None).ConfigureAwait(false);
-
-            return await Track(
-                name,
-                Convert.ToBase64String(buffer.GetBuffer(), 0, (int)buffer.Length),
-                cancellationToken,
-                os, browser, viewport, device, customTags, diffTollerancePercent, comment, ignoreAreas
-            ).ConfigureAwait(false);
-        }
-
-        public Task<TestRunResult> Track(
-            string name,
-            byte[] image,
-            CancellationToken? cancellationToken = null,
-            string os = null,
-            string browser = null,
-            string viewport = null,
-            string device = null,
-            string customTags = null,
-            double? diffTollerancePercent = null,
-            string comment = null,
-            IEnumerable<IgnoreAreaDto> ignoreAreas = null)
-        {
-            return Track(
-                name,
-                Convert.ToBase64String(image),
-                cancellationToken,
-                os, browser, viewport, device, customTags, diffTollerancePercent, comment, ignoreAreas
-            );
         }
 
         private void EnsureStarted()

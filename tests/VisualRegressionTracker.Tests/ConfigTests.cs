@@ -15,12 +15,14 @@ namespace VisualRegressionTracker.Tests
             yield return new object[] {new Config
             {
                 ApiUrl = "http://vrt:4200", CiBuildId = "ci 1", BranchName = "main",
-                Project = "Default project", ApiKey = "key 1", EnableSoftAssert = true
+                Project = "Default project", ApiKey = "key 1", EnableSoftAssert = true,
+                SourceBranch = "release", HttpTimeoutInSeconds = 0
             }};
             yield return new object[] {new Config
             {
                 ApiUrl = "https://vrt.example.com/api", CiBuildId = null, BranchName = "feature/x",
-                Project = "b4c8e5f0-0000-4000-8000-000000000000", ApiKey = "key 2", EnableSoftAssert = false
+                Project = "b4c8e5f0-0000-4000-8000-000000000000", ApiKey = "key 2", EnableSoftAssert = false,
+                SourceBranch = null, HttpTimeoutInSeconds = 360
             }};
         }
 
@@ -33,12 +35,7 @@ namespace VisualRegressionTracker.Tests
             var json2 = JsonSerializer.Serialize(actual);
 
             Assert.Equal(json, json2);
-            Assert.Equal(expected.ApiUrl, actual.ApiUrl);
-            Assert.Equal(expected.CiBuildId, actual.CiBuildId);
-            Assert.Equal(expected.Project, actual.Project);
-            Assert.Equal(expected.BranchName, actual.BranchName);
-            Assert.Equal(expected.ApiKey, actual.ApiKey);
-            Assert.Equal(expected.EnableSoftAssert, actual.EnableSoftAssert);
+            AssertConfigEqual(expected, actual);
         }
 
         [Theory]
@@ -49,12 +46,7 @@ namespace VisualRegressionTracker.Tests
             File.WriteAllText(path, JsonSerializer.Serialize(expected));
             var actual = Config.FromFile(path);
 
-            Assert.Equal(expected.ApiUrl, actual.ApiUrl);
-            Assert.Equal(expected.CiBuildId, actual.CiBuildId);
-            Assert.Equal(expected.Project, actual.Project);
-            Assert.Equal(expected.BranchName, actual.BranchName);
-            Assert.Equal(expected.ApiKey, actual.ApiKey);
-            Assert.Equal(expected.EnableSoftAssert, actual.EnableSoftAssert);
+            AssertConfigEqual(expected, actual);
         }
 
         [Fact]
@@ -137,16 +129,67 @@ namespace VisualRegressionTracker.Tests
             Environment.SetEnvironmentVariable("VRT_BRANCHNAME", expected.BranchName);
             Environment.SetEnvironmentVariable("VRT_APIKEY", expected.ApiKey);
             Environment.SetEnvironmentVariable("VRT_ENABLESOFTASSERT", expected.EnableSoftAssert ? "true" : "false");
+            Environment.SetEnvironmentVariable("VRT_SOURCEBRANCH", expected.SourceBranch);
+            Environment.SetEnvironmentVariable("VRT_HTTPTIMEOUTINSECONDS", expected.HttpTimeoutInSeconds.ToString());
 
             var actual = new Config();
             actual.ApplyEnvironment();
 
+            AssertConfigEqual(expected, actual);
+        }
+
+        static void AssertConfigEqual(Config expected, Config actual)
+        {
             Assert.Equal(expected.ApiUrl, actual.ApiUrl);
             Assert.Equal(expected.CiBuildId, actual.CiBuildId);
             Assert.Equal(expected.Project, actual.Project);
             Assert.Equal(expected.BranchName, actual.BranchName);
             Assert.Equal(expected.ApiKey, actual.ApiKey);
             Assert.Equal(expected.EnableSoftAssert, actual.EnableSoftAssert);
+            Assert.Equal(expected.SourceBranch, actual.SourceBranch);
+            Assert.Equal(expected.HttpTimeoutInSeconds, actual.HttpTimeoutInSeconds);
+        }
+
+        [Fact]
+        public void HttpTimeoutInSecondsDefaultsTo360()
+        {
+            Assert.Equal(360, new Config().HttpTimeoutInSeconds);
+        }
+
+        [Theory]
+        [InlineData("30")]
+        [InlineData("\"30\"")]
+        [MoveCurrentDirectory]
+        public void FromFile_AcceptsHttpTimeoutAsNumberOrString(string json)
+        {
+            File.WriteAllText(Config.DefaultPath, $@"{{""httpTimeoutInSeconds"": {json}}}");
+
+            Assert.Equal(30, Config.FromFile(Config.DefaultPath).HttpTimeoutInSeconds);
+        }
+
+        [Theory]
+        [InlineData("abc")]
+        [InlineData("1.5")]
+        [ClearEnvironment]
+        public void ApplyEnvironment_RejectsInvalidHttpTimeout(string value)
+        {
+            Environment.SetEnvironmentVariable("VRT_HTTPTIMEOUTINSECONDS", value);
+
+            var ex = Assert.Throws<VisualRegressionTrackerError>(() => new Config().ApplyEnvironment());
+
+            Assert.Contains("VRT_HTTPTIMEOUTINSECONDS", ex.Message);
+        }
+
+        [Theory]
+        [InlineData(-1)]
+        [InlineData(2_147_484)]
+        public void CheckComplete_RejectsHttpTimeoutOutOfRange(int seconds)
+        {
+            var cfg = new Config { BranchName = "main", Project = "project", ApiKey = "key", HttpTimeoutInSeconds = seconds };
+
+            var ex = Assert.Throws<VisualRegressionTrackerError>(() => cfg.CheckComplete());
+
+            Assert.Contains("HttpTimeoutInSeconds", ex.Message);
         }
 
         [Fact]
@@ -189,12 +232,7 @@ namespace VisualRegressionTracker.Tests
             File.WriteAllText(Config.DefaultPath, JsonSerializer.Serialize(expected));
             var actual = Config.GetDefault();
 
-            Assert.Equal(expected.ApiUrl, actual.ApiUrl);
-            Assert.Equal(expected.CiBuildId, actual.CiBuildId);
-            Assert.Equal(expected.Project, actual.Project);
-            Assert.Equal(expected.BranchName, actual.BranchName);
-            Assert.Equal(expected.ApiKey, actual.ApiKey);
-            Assert.Equal(expected.EnableSoftAssert, actual.EnableSoftAssert);
+            AssertConfigEqual(expected, actual);
         }
 
         [Theory]
@@ -206,12 +244,7 @@ namespace VisualRegressionTracker.Tests
             File.WriteAllText("bob.json", JsonSerializer.Serialize(expected));
             var actual = Config.GetDefault("bob.json");
 
-            Assert.Equal(expected.ApiUrl, actual.ApiUrl);
-            Assert.Equal(expected.CiBuildId, actual.CiBuildId);
-            Assert.Equal(expected.Project, actual.Project);
-            Assert.Equal(expected.BranchName, actual.BranchName);
-            Assert.Equal(expected.ApiKey, actual.ApiKey);
-            Assert.Equal(expected.EnableSoftAssert, actual.EnableSoftAssert);
+            AssertConfigEqual(expected, actual);
         }
 
         [Fact]
@@ -238,6 +271,8 @@ namespace VisualRegressionTracker.Tests
             Assert.Equal(fileConfig.BranchName, actual.BranchName);
             Assert.Equal(fileConfig.ApiKey, actual.ApiKey);
             Assert.Equal(fileConfig.EnableSoftAssert, actual.EnableSoftAssert);
+            Assert.Equal(fileConfig.SourceBranch, actual.SourceBranch);
+            Assert.Equal(fileConfig.HttpTimeoutInSeconds, actual.HttpTimeoutInSeconds);
         }
     }
 
@@ -274,6 +309,8 @@ namespace VisualRegressionTracker.Tests
             Environment.SetEnvironmentVariable("VRT_BRANCHNAME", null);
             Environment.SetEnvironmentVariable("VRT_APIKEY", null);
             Environment.SetEnvironmentVariable("VRT_ENABLESOFTASSERT", null);
+            Environment.SetEnvironmentVariable("VRT_SOURCEBRANCH", null);
+            Environment.SetEnvironmentVariable("VRT_HTTPTIMEOUTINSECONDS", null);
         }
 
         public override void After(MethodInfo methodUnderTest, IXunitTest test)
