@@ -9,6 +9,7 @@ namespace VisualRegressionTracker
         Unresolved,
         Failed,
         Approved,
-        AutoApproved
+        AutoApproved,
+        Unknown
     }
 }

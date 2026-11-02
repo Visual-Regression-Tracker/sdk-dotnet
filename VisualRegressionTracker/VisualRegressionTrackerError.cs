@@ -6,5 +6,6 @@ namespace VisualRegressionTracker
     {
         public VisualRegressionTrackerError(string message) : base(message) { }
         public VisualRegressionTrackerError(Exception exception) : base(exception.Message, exception) { }
+        public VisualRegressionTrackerError(string message, Exception exception) : base(message, exception) { }
     }
 }
