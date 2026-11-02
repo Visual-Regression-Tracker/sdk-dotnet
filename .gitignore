@@ -8,6 +8,5 @@ htmlcov
 !.vscode/launch.json
 !.vscode/extensions.json
 nuget_key.txt
-coverage.xml
 /.vs
 artifacts/

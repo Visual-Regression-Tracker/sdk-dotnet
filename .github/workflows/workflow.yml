@@ -20,8 +20,6 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
 
     runs-on: ${{ matrix.os }}
-    env:
-      HAS_CODACY_TOKEN: ${{ secrets.CODACY_TOKEN != '' }}
 
     steps:
       - uses: actions/checkout@v7
@@ -33,10 +31,3 @@ jobs:
       - name: Test
         shell: bash
         run: bin/test.sh
-      # secrets are not passed to pull requests from forks
-      - name: Upload coverage to Codacy
-        if: matrix.os == 'ubuntu-latest' && env.HAS_CODACY_TOKEN == 'true'
-        uses: codacy/codacy-coverage-reporter-action@v1.3.0
-        with:
-          project-token: ${{ secrets.CODACY_TOKEN }}
-          coverage-reports: coverage.xml
