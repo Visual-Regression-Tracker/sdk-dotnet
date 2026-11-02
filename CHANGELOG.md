@@ -1,7 +1,5 @@
 # Changelog
 
-The release workflow publishes the section whose heading matches the version tag.
-
 ## 5.0.0
 
 Works with VRT server 6.0 and targets .NET 10.
@@ -18,8 +16,7 @@ Works with VRT server 6.0 and targets .NET 10.
   `New` and `Unresolved` fail `Track`.
 - With `EnableSoftAssert`, failures are written to stderr instead of being dropped.
 - `Track(Stream)` leaves the caller's stream open.
-- The `HttpClient` the tracker creates waits up to 360 s, since the server compares the
-  images while it answers `Track`.
+- The `HttpClient` the tracker creates waits up to 360 s for slow comparisons.
 - No dependencies: NSwag and Newtonsoft.Json 12.0.2 (CVE-2024-21907) are gone.
 
 ### Breaking changes
