@@ -34,3 +34,13 @@ updates:
       github-actions:
         patterns:
           - "*"
+
+  - package-ecosystem: dotnet-sdk
+    directory: "/"
+    schedule:
+      interval: weekly
+    ignore:
+      # a new .NET major is a runtime-floor change, made by hand
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-major
