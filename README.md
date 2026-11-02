@@ -197,13 +197,19 @@ await vrt.Track("sdk-dotnet", screenshot);
 
 ## Releasing
 
-1. Set `<Version>` in `VisualRegressionTracker/VisualRegressionTracker.csproj`, add a
-   `## <version>` section to `CHANGELOG.md` and merge both to `main`.
-2. Push a tag with the same version, e.g. `git tag 5.0.0 && git push origin 5.0.0`.
+Merging to `main` releases. [semantic-release](https://semantic-release.gitbook.io/) reads the
+[Conventional Commits](https://www.conventionalcommits.org/) since the last tag: `fix:`, `perf:` and `revert:`
+make a patch, `feat:` a minor, and `!` after the type (`feat!:`) or a `BREAKING CHANGE:` footer a major
+release. Other types (`chore:`, `ci:`, `docs:`, ...) release nothing. A squash merge takes the PR title (or, for a
+single-commit PR, that commit's message) as its subject, so keep both conventional.
 
-The `Release` workflow then tests and packs the SDK, publishes it to NuGet through
-[trusted publishing](https://learn.microsoft.com/nuget/nuget-org/trusted-publishing)
-and creates the GitHub release with that `CHANGELOG.md` section as its notes. It needs
-a trusted publishing policy on nuget.org for this repository, workflow `release.yml`
-and environment `nuget`, and the `NUGET_USER` repository variable holding the
-nuget.org user name that owns the policy.
+The `Release` workflow runs the tests, tags the commit (`5.1.0`, no `v`), packs the SDK with that
+version (`-p:Version`), publishes it to NuGet through
+[trusted publishing](https://learn.microsoft.com/nuget/nuget-org/trusted-publishing) and then
+publishes the GitHub release with the generated notes and the `.nupkg`. Nothing is committed back.
+It needs a trusted publishing policy on nuget.org for this repository, workflow `release.yml` and
+environment `nuget`, and the `NUGET_USER` repository variable holding the nuget.org user name that
+owns the policy.
+
+If publishing fails, the tag and a draft release already exist: re-run the failed jobs of that run
+(not the whole run) before anything else is merged.

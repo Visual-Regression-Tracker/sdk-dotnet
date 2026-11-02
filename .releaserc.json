@@ -1,0 +1,12 @@
+{
+  "tagFormat": "${version}",
+  "plugins": [
+    ["@semantic-release/commit-analyzer", { "preset": "conventionalcommits" }],
+    ["@semantic-release/release-notes-generator", { "preset": "conventionalcommits" }],
+    ["@semantic-release/exec", {
+      "prepareCmd": "dotnet pack VisualRegressionTracker --configuration Release --output artifacts -p:Version=${nextRelease.version}",
+      "successCmd": "echo \"version=${nextRelease.version}\" >> \"$GITHUB_OUTPUT\""
+    }],
+    ["@semantic-release/github", { "draftRelease": true, "successCommentCondition": false, "assets": ["artifacts/*.nupkg"] }]
+  ]
+}

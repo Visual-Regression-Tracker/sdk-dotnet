@@ -2,7 +2,7 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <PackageId>VisualRegressionTracker</PackageId>
-    <Version>5.0.0</Version>
+    <Version>0.0.0-dev</Version>
     <Authors>Daniel Crowe</Authors>
     <Company>Visual Regression Tracker</Company>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>

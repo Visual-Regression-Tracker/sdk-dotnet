@@ -1,5 +1,7 @@
 # Changelog
 
+Later versions: [GitHub releases](https://github.com/Visual-Regression-Tracker/sdk-dotnet/releases).
+
 ## 5.0.0
 
 Works with VRT server 6.0 and targets .NET 10.

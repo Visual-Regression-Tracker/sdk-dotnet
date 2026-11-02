@@ -2,50 +2,58 @@ name: Release
 
 on:
   push:
-    tags: ['[0-9]+.[0-9]+.[0-9]+*']
+    branches: [main]
 
 permissions:
   contents: read
 
+concurrency:
+  group: release
+
 jobs:
-  build:
+  release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+    outputs:
+      version: ${{ steps.semantic-release.outputs.version }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
-      - name: Check the tag matches the package version
-        run: |
-          version=$(dotnet msbuild VisualRegressionTracker -getProperty:Version)
-          if [ "$version" != "$GITHUB_REF_NAME" ]; then
-            echo "::error::Tag $GITHUB_REF_NAME does not match <Version>$version</Version> in VisualRegressionTracker.csproj"
-            exit 1
-          fi
-      - name: Extract release notes
-        run: |
-          mkdir -p artifacts
-          awk -v version="$GITHUB_REF_NAME" '{ sub(/\r$/, "") } /^## / { section = ($2 == version); next } section' CHANGELOG.md > artifacts/release-notes.md
-          if ! grep -q '[^[:space:]]' artifacts/release-notes.md; then
-            echo "::error::CHANGELOG.md has no '## $GITHUB_REF_NAME' section"
-            exit 1
-          fi
       - name: Test
         run: dotnet test --configuration Release
-      - name: Pack
-        run: dotnet pack VisualRegressionTracker --configuration Release --no-build --output artifacts
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Build, tag and draft the GitHub release
+        id: semantic-release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        # Preset 10+ needs conventional-changelog-writer 9; semantic-release 25 bundles writer 8.
+        run: >
+          npx --yes
+          -p semantic-release@25.0.9
+          -p @semantic-release/exec@7.1.0
+          -p conventional-changelog-conventionalcommits@9.3.1
+          semantic-release
       - uses: actions/upload-artifact@v7
+        if: steps.semantic-release.outputs.version
         with:
           name: package
           path: artifacts
           if-no-files-found: error
 
   publish:
-    needs: build
+    needs: release
+    if: needs.release.outputs.version
     runs-on: ubuntu-latest
     environment: nuget
     permissions:
-      contents: write
       id-token: write
     steps:
       - uses: actions/download-artifact@v8
@@ -63,10 +71,15 @@ jobs:
           --api-key "${{ steps.login.outputs.NUGET_API_KEY }}"
           --source https://api.nuget.org/v3/index.json
           --skip-duplicate
-      - name: Create GitHub release
+
+  github-release:
+    needs: [release, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Publish the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          prerelease=()
-          if [[ "$GITHUB_REF_NAME" == *-* ]]; then prerelease=(--prerelease); fi
-          gh release create "$GITHUB_REF_NAME" artifacts/*.nupkg --repo "$GITHUB_REPOSITORY" --verify-tag --notes-file artifacts/release-notes.md "${prerelease[@]}"
+          VERSION: ${{ needs.release.outputs.version }}
+        run: gh release edit "$VERSION" --repo "$GITHUB_REPOSITORY" --draft=false
