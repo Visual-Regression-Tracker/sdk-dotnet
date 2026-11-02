@@ -25,7 +25,7 @@ jobs:
       - name: Extract release notes
         run: |
           mkdir -p artifacts
-          awk -v version="$GITHUB_REF_NAME" '/^## / { section = ($2 == version); next } section' CHANGELOG.md > artifacts/release-notes.md
+          awk -v version="$GITHUB_REF_NAME" '{ sub(/\r$/, "") } /^## / { section = ($2 == version); next } section' CHANGELOG.md > artifacts/release-notes.md
           if ! grep -q '[^[:space:]]' artifacts/release-notes.md; then
             echo "::error::CHANGELOG.md has no '## $GITHUB_REF_NAME' section"
             exit 1
