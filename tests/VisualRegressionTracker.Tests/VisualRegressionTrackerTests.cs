@@ -1,19 +1,39 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
-using FizzWare.NBuilder;
-using Moq; 
 using Xunit;
 
 namespace VisualRegressionTracker.Tests
 {
+    [Collection(nameof(ConsoleCollection))]
     public class VisualRegressionTrackerTests
     {
-        public VisualRegressionTrackerTests() 
+        const string BuildJson = @"{
+            ""id"":""build-1"",
+            ""ciBuildId"":""build id"",
+            ""number"":7,
+            ""branchName"":""branch name"",
+            ""status"":""new"",
+            ""projectId"":""project-1"",
+            ""updatedAt"":""2026-11-02T10:00:00.000Z"",
+            ""createdAt"":""2026-11-02T10:00:00.000Z"",
+            ""userId"":null,
+            ""passedCount"":0,
+            ""unresolvedCount"":0,
+            ""failedCount"":0,
+            ""isRunning"":true,
+            ""merge"":false
+        }";
+        const string ErrorJson = @"{{""statusCode"":{0},""path"":""/{1}"",""name"":""Error"",""message"":""{2}""}}";
+
+        readonly FakeHandler handler = new FakeHandler();
+        readonly Config config;
+        readonly VisualRegressionTracker vrt;
+
+        public VisualRegressionTrackerTests()
         {
             config = new Config
             {
@@ -23,248 +43,216 @@ namespace VisualRegressionTracker.Tests
                 ApiUrl = "http://localhost:4200",
                 ApiKey = "api key"
             };
-            vrt = new VisualRegressionTracker(config, new HttpClient(mock.Object));
+            vrt = new VisualRegressionTracker(config, new HttpClient(handler));
         }
 
-        readonly CancellationTokenSource tokenSource = new CancellationTokenSource();
-        readonly Mock<HttpMessageHandler> mock = new Mock<HttpMessageHandler>();
-        readonly Config config;
-        readonly VisualRegressionTracker vrt;
-
-        public static IEnumerable<object[]> Exceptions()
+        static string TestRunJson(string status, string diffName = "diff.png", string baselineName = "baseline.png")
         {
-            yield return new object[] {new ApiException("eeek", 1, "", null, null)};
-            yield return new object[] {new ApiException<string>("eeek", 1, "", null, null, null)};
-            yield return new object[] {new HttpRequestException("eek")};
+            return $@"{{
+                ""id"":""run-1"",
+                ""buildId"":""build-1"",
+                ""imageName"":""image.png"",
+                ""imageThumbnailName"":null,
+                ""diffThumbnailName"":null,
+                ""diffName"":{(diffName == null ? "null" : $@"""{diffName}""")},
+                ""diffPercent"":1.5,
+                ""diffTollerancePercent"":0,
+                ""status"":""{status}"",
+                ""testVariationId"":""variation-1"",
+                ""name"":""image name"",
+                ""baselineName"":{(baselineName == null ? "null" : $@"""{baselineName}""")},
+                ""os"":null,
+                ""browser"":null,
+                ""viewport"":null,
+                ""device"":null,
+                ""customTags"":"""",
+                ""ignoreAreas"":""[]"",
+                ""tempIgnoreAreas"":""[]"",
+                ""comment"":null,
+                ""branchName"":""branch name"",
+                ""baselineBranchName"":""master"",
+                ""merge"":false,
+                ""vlmDescription"":null,
+                ""pixelMisMatchCount"":10,
+                ""url"":""http://frontend/project-1?buildId=build-1&testId=run-1""
+            }}";
         }
 
-        [Fact]
-        public void Defaults() 
+        async Task StartBuild()
         {
-            Assert.False(vrt.IsStarted);
-            Assert.Null(vrt.BuildId);
-            Assert.Null(vrt.ProjectId);
-        }
-
-        [Fact]
-        public async Task Start()
-        {
-            var buildDto = Builder<BuildDto>.CreateNew().Build();
-            
-            mock.SetupRequest(
-                HttpMethod.Post,
-                "http://localhost:4200/builds",
-                new CreateBuildDto
-                {
-                    BranchName = config.BranchName,
-                    Project = config.Project,
-                    CiBuildId = config.CiBuildId,
-                },
-                HttpStatusCode.Created,
-                buildDto);
-
+            handler.Respond(HttpStatusCode.Created, BuildJson);
             await vrt.Start();
+        }
 
-            Assert.True(vrt.IsStarted);
-            Assert.Equal(buildDto.ProjectId, vrt.ProjectId);
-            Assert.Equal(buildDto.Id, vrt.BuildId);
-
-            mock.VerifyRequest(1, req => {
-                req.Headers.TryGetValues("apiKey", out var apiKey);
-                Assert.Equal(new[] {config.ApiKey}, apiKey);
-                req.Headers.TryGetValues("project", out var project);
-                Assert.Equal(new[] {config.Project}, project);
-            });
+        async Task<TestRunResult> TrackWithStatus(string status)
+        {
+            await StartBuild();
+            handler.Respond(HttpStatusCode.Created, TestRunJson(status));
+            return await vrt.Track("image name", "aW1hZ2U=");
         }
 
         [Fact]
-        public async Task Start_CancellationToken()
+        public void Defaults()
         {
-            var buildDto = Builder<BuildDto>.CreateNew().Build();
-            
-            mock.SetupRequest(
-                HttpMethod.Post,
-                "http://localhost:4200/builds",
-                new CreateBuildDto
-                {
-                    BranchName = config.BranchName,
-                    Project = config.Project,
-                    CiBuildId = config.CiBuildId,
-                },
-                HttpStatusCode.Created,
-                buildDto);
-
-            await vrt.Start(tokenSource.Token);
-
-            Assert.True(vrt.IsStarted);
-            Assert.Equal(buildDto.ProjectId, vrt.ProjectId);
-            Assert.Equal(buildDto.Id, vrt.BuildId);
-
-            mock.VerifyRequest(1, req => {
-                req.Headers.TryGetValues("apiKey", out var apiKey);
-                Assert.Equal(new[] {config.ApiKey}, apiKey);
-                req.Headers.TryGetValues("project", out var project);
-                Assert.Equal(new[] {config.Project}, project);
-            });
-        }
-
-        [Theory]
-        [MemberData(nameof(Exceptions))]
-        public async Task Start_WrapsExceptions(Exception exception)
-        {
-            mock.SetupRequest(exception);
-
-            await Assert.ThrowsAsync<VisualRegressionTrackerError>(async () => {
-                await vrt.Start();
-            });
-        }
-
-        [Fact]
-        public async Task Start_DisposeCallsStop()
-        {
-            var buildDto = Builder<BuildDto>.CreateNew().Build();
-            
-            mock.SetupRequest(
-                HttpMethod.Post,
-                "http://localhost:4200/builds",
-                new CreateBuildDto
-                {
-                    BranchName = config.BranchName,
-                    Project = config.Project,
-                    CiBuildId = config.CiBuildId,
-                },
-                HttpStatusCode.Created,
-                buildDto);
-
-            await using (await vrt.Start())
-            {
-                Assert.True(vrt.IsStarted);
-                Assert.Equal(buildDto.ProjectId, vrt.ProjectId);
-                Assert.Equal(buildDto.Id, vrt.BuildId);
-
-                mock.Reset();
-                mock.SetupRequest(
-                    HttpMethod.Patch,
-                    "http://localhost:4200/builds/" + vrt.BuildId,
-                    HttpStatusCode.OK);
-            }
-            
             Assert.False(vrt.IsStarted);
             Assert.Null(vrt.BuildId);
             Assert.Null(vrt.ProjectId);
         }
 
         [Fact]
-        public async Task Stop()
+        public async Task Start_CreatesBuild()
         {
-            await Start();
-            
-            mock.Reset();
-            mock.SetupRequest(
-                HttpMethod.Patch,
-                "http://localhost:4200/builds/" + vrt.BuildId,
-                HttpStatusCode.OK);
+            await StartBuild();
+
+            Assert.True(vrt.IsStarted);
+            Assert.Equal("build-1", vrt.BuildId);
+            Assert.Equal("project-1", vrt.ProjectId);
+            var request = handler.LastRequest;
+            Assert.Equal(HttpMethod.Post, request.Method);
+            Assert.Equal("http://localhost:4200/builds", request.Url);
+            Assert.Equal("api key", request.ApiKey);
+            Assert.Equal("project", request.Project);
+            JsonAssert.Equal(
+                @"{""branchName"":""branch name"",""project"":""project"",""ciBuildId"":""build id""}",
+                request.Body);
+        }
+
+        [Fact]
+        public async Task Start_WithCancellationToken()
+        {
+            handler.Respond(HttpStatusCode.Created, BuildJson);
+
+            await vrt.Start(TestContext.Current.CancellationToken);
+
+            Assert.Equal("build-1", vrt.BuildId);
+        }
+
+        [Fact]
+        public async Task Start_OmitsCiBuildIdWhenNotConfigured()
+        {
+            config.CiBuildId = null;
+
+            await StartBuild();
+
+            JsonAssert.Equal(@"{""branchName"":""branch name"",""project"":""project""}", handler.LastRequest.Body);
+        }
+
+        [Fact]
+        public async Task Start_WithTrailingSlashInApiUrl()
+        {
+            config.ApiUrl = "http://localhost:4200/";
+            var tracker = new VisualRegressionTracker(config, new HttpClient(handler));
+            handler.Respond(HttpStatusCode.Created, BuildJson);
+
+            await tracker.Start();
+
+            Assert.Equal("http://localhost:4200/builds", handler.LastRequest.Url);
+        }
+
+        [Fact]
+        public async Task Start_WrapsNetworkErrors()
+        {
+            handler.Throw(new HttpRequestException("connection refused"));
+
+            var ex = await Assert.ThrowsAsync<VisualRegressionTrackerError>(() => vrt.Start());
+
+            Assert.Contains("connection refused", ex.Message);
+        }
+
+        [Fact]
+        public async Task Start_ReportsServerMessage()
+        {
+            handler.Respond(HttpStatusCode.NotFound, string.Format(ErrorJson, 404, "builds", "Project not found: project"));
+
+            var ex = await Assert.ThrowsAsync<ServerError>(() => vrt.Start());
+
+            Assert.Equal(HttpStatusCode.NotFound, ex.StatusCode);
+            Assert.Equal("Project not found: project", ex.ServerMessage);
+            Assert.Equal("POST /builds failed with 404: Project not found: project", ex.Message);
+        }
+
+        [Fact]
+        public async Task Stop_SendsIsRunningFalse()
+        {
+            await StartBuild();
+            handler.Respond(HttpStatusCode.OK, BuildJson);
 
             await vrt.Stop();
 
             Assert.False(vrt.IsStarted);
             Assert.Null(vrt.BuildId);
             Assert.Null(vrt.ProjectId);
-
-            mock.VerifyRequest(1, req => {
-                req.Headers.TryGetValues("apiKey", out var apiKey);
-                Assert.Equal(new[] {config.ApiKey}, apiKey);
-                req.Headers.TryGetValues("project", out var project);
-                Assert.Equal(new[] {config.Project}, project);
-            });
+            var request = handler.LastRequest;
+            Assert.Equal(HttpMethod.Patch, request.Method);
+            Assert.Equal("http://localhost:4200/builds/build-1", request.Url);
+            Assert.Equal("api key", request.ApiKey);
+            Assert.Equal("project", request.Project);
+            JsonAssert.Equal(@"{""isRunning"":false}", request.Body);
         }
 
         [Fact]
-        public async Task Stop_CancellationToken()
+        public async Task Stop_WithCancellationToken()
         {
-            await Start();
-            
-            mock.Reset();
-            mock.SetupRequest(
-                HttpMethod.Patch,
-                "http://localhost:4200/builds/" + vrt.BuildId,
-                HttpStatusCode.OK);
+            await StartBuild();
+            handler.Respond(HttpStatusCode.OK, BuildJson);
 
-            await vrt.Stop(tokenSource.Token);
+            await vrt.Stop(TestContext.Current.CancellationToken);
 
             Assert.False(vrt.IsStarted);
-            Assert.Null(vrt.BuildId);
-            Assert.Null(vrt.ProjectId);
+        }
 
-            mock.VerifyRequest(1, req => {
-                req.Headers.TryGetValues("apiKey", out var apiKey);
-                Assert.Equal(new[] {config.ApiKey}, apiKey);
-                req.Headers.TryGetValues("project", out var project);
-                Assert.Equal(new[] {config.Project}, project);
-            });
+        [Fact]
+        public async Task Start_DisposeStopsBuild()
+        {
+            handler.Respond(HttpStatusCode.Created, BuildJson);
+            handler.Respond(HttpStatusCode.OK, BuildJson);
+
+            await using (await vrt.Start())
+            {
+                Assert.True(vrt.IsStarted);
+            }
+
+            Assert.False(vrt.IsStarted);
+            Assert.Equal(HttpMethod.Patch, handler.LastRequest.Method);
         }
 
         [Fact]
         public async Task Stop_ThrowsIfNotStarted()
         {
-            await Assert.ThrowsAsync<VisualRegressionTrackerError>(async () => {
-                await vrt.Stop();
-            });
-        }
-
-        [Theory]
-        [MemberData(nameof(Exceptions))]
-        public async Task Stop_WrapsExceptions(Exception exception)
-        {
-            await Start();
-
-            mock.Reset();
-            mock.SetupRequest(exception);
-
-            await Assert.ThrowsAsync<VisualRegressionTrackerError>(async () => {
-                await vrt.Stop();
-            });
+            await Assert.ThrowsAsync<VisualRegressionTrackerError>(async () => await vrt.Stop());
         }
 
         [Fact]
-        public async Task Track()
+        public async Task Stop_WrapsNetworkErrors()
         {
-            await Start();
+            await StartBuild();
+            handler.Throw(new HttpRequestException("connection reset"));
 
-            var responseDto = Builder<TestRunResultDto>.CreateNew().Build();
-            responseDto.Status = "ok";
+            await Assert.ThrowsAsync<VisualRegressionTrackerError>(async () => await vrt.Stop());
+            Assert.True(vrt.IsStarted);
+        }
 
-            mock.Reset();
-            mock.SetupRequest(
-                HttpMethod.Post,
-                "http://localhost:4200/test-runs",
-                new CreateTestRequestDto
-                {
-                    BranchName = config.BranchName,
-                    ProjectId = vrt.ProjectId,
-                    BuildId = vrt.BuildId,
-                    Name = "image name",
-                    ImageBase64 = "image base 64",
-                    Os = "os",
-                    Browser = "browser",
-                    Viewport = "viewport",
-                    Device = "device",
-                    CustomTags = "customTags",
-                    DiffTollerancePercent = 15,
-                    Comment = "testcomment",
-                    IgnoreAreas = new [] 
-                    {
-                        new IgnoreAreaDto{X=1, Y=2, Width=3, Height=4}
-                    }
-                },
-                HttpStatusCode.Created,
-                responseDto
-            );
+        [Fact]
+        public async Task Stop_ReportsServerMessage()
+        {
+            await StartBuild();
+            handler.Respond(HttpStatusCode.Forbidden, string.Format(ErrorJson, 403, "builds/build-1", "You do not have permission to perform this operation."));
 
-            var result = await vrt.Track(
+            var ex = await Assert.ThrowsAsync<ServerError>(async () => await vrt.Stop());
+
+            Assert.Contains("You do not have permission to perform this operation.", ex.Message);
+        }
+
+        [Fact]
+        public async Task Track_SendsAllFields()
+        {
+            await StartBuild();
+            handler.Respond(HttpStatusCode.Created, TestRunJson("ok"));
+
+            await vrt.Track(
                 "image name",
-                "image base 64",
-                tokenSource.Token,
+                "aW1hZ2U=",
+                TestContext.Current.CancellationToken,
                 os: "os",
                 browser: "browser",
                 viewport: "viewport",
@@ -272,53 +260,68 @@ namespace VisualRegressionTracker.Tests
                 customTags: "customTags",
                 diffTollerancePercent: 15,
                 comment: "testcomment",
-                ignoreAreas: new[] 
-                { 
-                    new IgnoreAreaDto{X=1, Y=2, Width=3, Height=4}
-                }
-            );
-            
-            Assert.Equal(TestRunStatus.Ok, result.Status);
-            Assert.Equal(responseDto.Url, result.Url);
-            Assert.Equal(responseDto.Url + "/" + responseDto.ImageName, result.ImageUrl);
-            Assert.Equal(responseDto.Url + "/" + responseDto.DiffName, result.DiffUrl);
-            Assert.Equal(responseDto.Url + "/" + responseDto.BaselineName, result.BaselineUrl);
+                ignoreAreas: new[] { new IgnoreAreaDto { X = 1, Y = 2, Width = 3, Height = 4 } });
+
+            var request = handler.LastRequest;
+            Assert.Equal(HttpMethod.Post, request.Method);
+            Assert.Equal("http://localhost:4200/test-runs", request.Url);
+            Assert.Equal("api key", request.ApiKey);
+            Assert.Equal("project", request.Project);
+            JsonAssert.Equal(
+                @"{
+                    ""name"":""image name"",
+                    ""imageBase64"":""aW1hZ2U="",
+                    ""buildId"":""build-1"",
+                    ""projectId"":""project-1"",
+                    ""branchName"":""branch name"",
+                    ""os"":""os"",
+                    ""browser"":""browser"",
+                    ""viewport"":""viewport"",
+                    ""device"":""device"",
+                    ""customTags"":""customTags"",
+                    ""diffTollerancePercent"":15,
+                    ""comment"":""testcomment"",
+                    ""ignoreAreas"":[{""x"":1,""y"":2,""width"":3,""height"":4}]
+                }",
+                request.Body);
         }
 
         [Fact]
-        public async Task Track_MinimalFields()
+        public async Task Track_SendsOnlyGivenFields()
         {
-            await Start();
+            await TrackWithStatus("ok");
 
-            var responseDto = Builder<TestRunResultDto>.CreateNew().Build();
-            responseDto.Status = "ok";
-            responseDto.BaselineName = "";
-            responseDto.DiffName = "";
+            JsonAssert.Equal(
+                @"{
+                    ""name"":""image name"",
+                    ""imageBase64"":""aW1hZ2U="",
+                    ""buildId"":""build-1"",
+                    ""projectId"":""project-1"",
+                    ""branchName"":""branch name""
+                }",
+                handler.LastRequest.Body);
+        }
 
-            mock.Reset();
-            mock.SetupRequest(
-                HttpMethod.Post,
-                "http://localhost:4200/test-runs",
-                new CreateTestRequestDto
-                {
-                    BranchName = config.BranchName,
-                    ProjectId = vrt.ProjectId,
-                    BuildId = vrt.BuildId,
-                    Name = "image name",
-                    ImageBase64 = "image base 64",
-                },
-                HttpStatusCode.Created,
-                responseDto
-            );
+        [Fact]
+        public async Task Track_BuildsImageUrlsFromApiUrl()
+        {
+            var result = await TrackWithStatus("ok");
 
-            var result = await vrt.Track(
-                "image name",
-                "image base 64"
-            );
+            Assert.Equal("http://frontend/project-1?buildId=build-1&testId=run-1", result.Url);
+            Assert.Equal("http://localhost:4200/images/image.png", result.ImageUrl);
+            Assert.Equal("http://localhost:4200/images/diff.png", result.DiffUrl);
+            Assert.Equal("http://localhost:4200/images/baseline.png", result.BaselineUrl);
+        }
 
-            Assert.Equal(TestRunStatus.Ok, result.Status);
-            Assert.Equal(responseDto.Url, result.Url);
-            Assert.Equal(responseDto.Url + "/" + responseDto.ImageName, result.ImageUrl);
+        [Fact]
+        public async Task Track_LeavesDiffAndBaselineUrlsEmptyWithoutImages()
+        {
+            await StartBuild();
+            handler.Respond(HttpStatusCode.Created, TestRunJson("ok", diffName: null, baselineName: null));
+
+            var result = await vrt.Track("image name", "aW1hZ2U=");
+
+            Assert.Equal("http://localhost:4200/images/image.png", result.ImageUrl);
             Assert.Null(result.DiffUrl);
             Assert.Null(result.BaselineUrl);
         }
@@ -326,145 +329,136 @@ namespace VisualRegressionTracker.Tests
         [Fact]
         public async Task Track_ThrowsIfNotStarted()
         {
-            await Assert.ThrowsAsync<VisualRegressionTrackerError>(async () => {
-                await vrt.Track("name", "image base 64");
-            });
+            await Assert.ThrowsAsync<VisualRegressionTrackerError>(() => vrt.Track("name", "aW1hZ2U="));
         }
 
         [Theory]
-        [InlineData(false, "approved", "Unexpected status")]
-        [InlineData(false, "failed", "Unexpected status")]
-        [InlineData(false, "new", "No baseline: Url1")]
-        [InlineData(false, "unresolved", "Difference found: Url1")]
-        public async Task Track_ThrowsVisualRegressionTrackerError(bool enableSoftAssert, string status, string expectedMessage)
+        [InlineData("new", "No baseline: http://frontend/project-1?buildId=build-1&testId=run-1")]
+        [InlineData("unresolved", "Difference found: http://frontend/project-1?buildId=build-1&testId=run-1")]
+        public async Task Track_ThrowsOnNewAndUnresolved(string status, string expectedMessage)
         {
-            await Start();
-
-            var responseDto = Builder<TestRunResultDto>.CreateNew().Build();
-            responseDto.Status = status;
-
-            mock.Reset();
-            mock.SetupRequest(
-                HttpMethod.Post,
-                "http://localhost:4200/test-runs",
-                new CreateTestRequestDto
-                {
-                    BranchName = config.BranchName,
-                    ProjectId = vrt.ProjectId,
-                    BuildId = vrt.BuildId,
-                    Name = "image name",
-                    ImageBase64 = "image base 64",
-                },
-                HttpStatusCode.Created,
-                responseDto
-            );
-            config.EnableSoftAssert = enableSoftAssert;
-
-            var ex = await Assert.ThrowsAsync<VisualRegressionTrackerError>(async () => 
-            {
-                 await vrt.Track("image name", "image base 64");
-            });
+            var ex = await Assert.ThrowsAsync<VisualRegressionTrackerError>(() => TrackWithStatus(status));
 
             Assert.Equal(expectedMessage, ex.Message);
         }
 
         [Theory]
-        [InlineData(true, "approved", TestRunStatus.Approved)]
-        [InlineData(false, "autoApproved", TestRunStatus.AutoApproved)]
-        [InlineData(true, "autoApproved", TestRunStatus.AutoApproved)]
-        [InlineData(true, "failed", TestRunStatus.Failed)]
-        [InlineData(true, "new", TestRunStatus.New)]
-        [InlineData(false, "ok", TestRunStatus.Ok)]
-        [InlineData(true, "ok", TestRunStatus.Ok)]
-        [InlineData(true, "unresolved", TestRunStatus.Unresolved)]
-        public async Task Track_ReturnStatus(bool enableSoftAssert, string status, TestRunStatus expectedStatus)
+        [InlineData("ok", TestRunStatus.Ok)]
+        [InlineData("approved", TestRunStatus.Approved)]
+        [InlineData("autoApproved", TestRunStatus.AutoApproved)]
+        [InlineData("failed", TestRunStatus.Failed)]
+        public async Task Track_ReturnsOtherStatuses(string status, TestRunStatus expected)
         {
-            await Start();
+            var result = await TrackWithStatus(status);
 
-            var responseDto = Builder<TestRunResultDto>.CreateNew().Build();
-            responseDto.Status = status;
+            Assert.Equal(expected, result.Status);
+        }
 
-            mock.Reset();
-            mock.SetupRequest(
-                HttpMethod.Post,
-                "http://localhost:4200/test-runs",
-                new CreateTestRequestDto
-                {
-                    BranchName = config.BranchName,
-                    ProjectId = vrt.ProjectId,
-                    BuildId = vrt.BuildId,
-                    Name = "image name",
-                    ImageBase64 = "image base 64",
-                },
-                HttpStatusCode.Created,
-                responseDto
-            );
+        [Fact]
+        public async Task Track_ToleratesUnknownStatus()
+        {
+            var result = await TrackWithStatus("somethingNew");
 
-            config.EnableSoftAssert = enableSoftAssert;
-            var result = await vrt.Track("image name", "image base 64");
+            Assert.Equal(TestRunStatus.Unknown, result.Status);
+        }
 
-            Assert.Equal(expectedStatus, result.Status);
+        [Theory]
+        [InlineData("new", TestRunStatus.New, "No baseline: http://frontend/project-1?buildId=build-1&testId=run-1")]
+        [InlineData("unresolved", TestRunStatus.Unresolved, "Difference found: http://frontend/project-1?buildId=build-1&testId=run-1")]
+        public async Task Track_SoftAssertLogsInsteadOfThrowing(string status, TestRunStatus expected, string expectedLog)
+        {
+            config.EnableSoftAssert = true;
+            var log = new StringWriter();
+            var stderr = Console.Error;
+            Console.SetError(log);
+            try
+            {
+                var result = await TrackWithStatus(status);
+
+                Assert.Equal(expected, result.Status);
+            }
+            finally
+            {
+                Console.SetError(stderr);
+            }
+
+            Assert.Contains(expectedLog, log.ToString());
+        }
+
+        [Fact]
+        public async Task Track_PayloadTooLargeHasHint()
+        {
+            await StartBuild();
+            handler.Respond(HttpStatusCode.RequestEntityTooLarge, string.Format(ErrorJson, 413, "test-runs", "request entity too large"));
+
+            var ex = await Assert.ThrowsAsync<ServerError>(() => vrt.Track("image name", "aW1hZ2U="));
+
+            Assert.Equal(HttpStatusCode.RequestEntityTooLarge, ex.StatusCode);
+            Assert.Equal("request entity too large", ex.ServerMessage);
+            Assert.Contains("BODY_PARSER_JSON_LIMIT", ex.Message);
+        }
+
+        [Fact]
+        public async Task Track_ImageTooLargeHasHint()
+        {
+            await StartBuild();
+            handler.Respond(HttpStatusCode.UnprocessableEntity, string.Format(ErrorJson, 422, "test-runs", "Image is 20000x20000 (400000000 pixels), above MAX_IMAGE_PIXELS=100000000"));
+
+            var ex = await Assert.ThrowsAsync<ServerError>(() => vrt.Track("image name", "aW1hZ2U="));
+
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, ex.StatusCode);
+            Assert.Contains("above MAX_IMAGE_PIXELS=100000000", ex.Message);
+            Assert.Contains("smaller", ex.Message);
+        }
+
+        [Fact]
+        public async Task Track_ReportsNonJsonErrorBody()
+        {
+            await StartBuild();
+            handler.Respond(HttpStatusCode.BadGateway, "<html>Bad Gateway</html>", "text/html");
+
+            var ex = await Assert.ThrowsAsync<ServerError>(() => vrt.Track("image name", "aW1hZ2U="));
+
+            Assert.Equal(HttpStatusCode.BadGateway, ex.StatusCode);
+            Assert.Equal("<html>Bad Gateway</html>", ex.ServerMessage);
+        }
+
+        [Fact]
+        public async Task Track_WrapsNetworkErrors()
+        {
+            await StartBuild();
+            handler.Throw(new HttpRequestException("connection reset"));
+
+            await Assert.ThrowsAsync<VisualRegressionTrackerError>(() => vrt.Track("image name", "aW1hZ2U="));
         }
 
         [Fact]
         public async Task Track_Stream()
         {
-            var imageContent = new byte[] {0,1,2,3,4,5,6,7,8,9};
-            var imageStream = new MemoryStream(imageContent);
-            var expectedBase64 = Convert.ToBase64String(imageContent);
+            var image = new MemoryStream(new byte[] { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 });
+            await StartBuild();
+            handler.Respond(HttpStatusCode.Created, TestRunJson("ok"));
 
-            await Start();
+            await vrt.Track("image name", image);
 
-            var responseDto = Builder<TestRunResultDto>.CreateNew().Build();
-            responseDto.Status = "ok";
-
-            mock.Reset();
-            mock.SetupRequest(
-                HttpMethod.Post,
-                "http://localhost:4200/test-runs",
-                new CreateTestRequestDto
-                {
-                    BranchName = config.BranchName,
-                    ProjectId = vrt.ProjectId,
-                    BuildId = vrt.BuildId,
-                    Name = "image name",
-                    ImageBase64 = expectedBase64,
-                },
-                HttpStatusCode.Created,
-                responseDto
-            );
-
-            await vrt.Track("image name", imageStream);
+            Assert.Contains(@"""imageBase64"":""AAECAwQFBgcICQ==""", handler.LastRequest.Body);
+            Assert.True(image.CanRead);
         }
 
         [Fact]
         public async Task Track_Array()
         {
-            var imageContent = new byte[] {0,1,2,3,4,5,6,7,8,9};
-            var expectedBase64 = Convert.ToBase64String(imageContent);
+            await StartBuild();
+            handler.Respond(HttpStatusCode.Created, TestRunJson("ok"));
 
-            await Start();
+            await vrt.Track("image name", new byte[] { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 });
 
-            var responseDto = Builder<TestRunResultDto>.CreateNew().Build();
-            responseDto.Status = "ok";
-
-            mock.Reset();
-            mock.SetupRequest(
-                HttpMethod.Post,
-                "http://localhost:4200/test-runs",
-                new CreateTestRequestDto
-                {
-                    BranchName = config.BranchName,
-                    ProjectId = vrt.ProjectId,
-                    BuildId = vrt.BuildId,
-                    Name = "image name",
-                    ImageBase64 = expectedBase64,
-                },
-                HttpStatusCode.Created,
-                responseDto
-            );
-
-            await vrt.Track("image name", imageContent);
+            Assert.Contains(@"""imageBase64"":""AAECAwQFBgcICQ==""", handler.LastRequest.Body);
         }
+    }
+
+    [CollectionDefinition(nameof(ConsoleCollection), DisableParallelization = true)]
+    public class ConsoleCollection
+    {
     }
 }

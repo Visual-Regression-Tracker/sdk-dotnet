@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
-using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -45,16 +44,11 @@ namespace VisualRegressionTracker
             this.config = config ?? Config.GetDefault();
             this.config.CheckComplete();
 
-            var apiUrl = this.config.ApiUrl + (this.config.ApiUrl.EndsWith('/') ? "" : "/");
-
-            this.client = new ApiClient(
-                apiUrl,
-                httpClient ?? new HttpClient()
-            )
-            {
-                ApiKey = this.config.ApiKey,
-                Project = this.config.Project
-            };
+            client = new ApiClient(
+                httpClient ?? new HttpClient(),
+                this.config.ApiUrl,
+                this.config.ApiKey,
+                this.config.Project);
         }
 
         public bool IsStarted => buildId != null && projectId != null;
@@ -73,32 +67,15 @@ namespace VisualRegressionTracker
 
         protected async Task<IAsyncDisposable> Start(CancellationToken? cancellationToken)
         {
-            try
-            {
-                var dto = new CreateBuildDto
-                {
-                    Project = config.Project,
-                    BranchName = config.BranchName,
-                    CiBuildId = config.CiBuildId
-                };
-                var response = cancellationToken.HasValue
-                    ? await client.BuildsController_createAsync(dto, cancellationToken.Value)
-                    : await client.BuildsController_createAsync(dto);
+            var build = await client.CreateBuild(
+                new CreateBuildDto(config.BranchName, config.Project, config.CiBuildId),
+                cancellationToken ?? CancellationToken.None).ConfigureAwait(false);
 
-                buildId = response.Id;
-                projectId = response.ProjectId;
-                return new Disposer(this, cancellationToken);
-            }
-            catch (ApiException ex)
-            {
-                throw new VisualRegressionTrackerError(ex);
-            }
-            catch (HttpRequestException ex)
-            {
-                throw new VisualRegressionTrackerError(ex);
-            }
+            buildId = build.Id;
+            projectId = build.ProjectId;
+            return new Disposer(this, cancellationToken);
         }
-         
+
         public ValueTask Stop()
         {
             return Stop(null);
@@ -115,63 +92,10 @@ namespace VisualRegressionTracker
                 throw new VisualRegressionTrackerError("Visual Regression Tracker has not been started");
             }
 
-            try
-            {
-                if (cancellationToken.HasValue) {
-                    await client.BuildsController_stopAsync(buildId, cancellationToken.Value);
-                } else {
-                    await client.BuildsController_stopAsync(buildId);
-                }
+            await client.StopBuild(buildId, cancellationToken ?? CancellationToken.None).ConfigureAwait(false);
 
-                buildId = null;
-                projectId = null;
-            }
-            catch (ApiException ex)
-            {
-                throw new VisualRegressionTrackerError(ex);
-            }
-            catch (HttpRequestException ex)
-            {
-                throw new VisualRegressionTrackerError(ex);
-            }
-        }
-
-        protected async Task<TestRunResult> SubmitTestRun(
-            CreateTestRequestDto testRun, CancellationToken? cancellationToken)
-        {
-            if (!IsStarted) {
-                throw new VisualRegressionTrackerError("Visual Regression Tracker has not been started");
-            }
-
-            var response = cancellationToken.HasValue
-                ? await client.TestRunsController_postTestRunAsync(testRun, cancellationToken.Value)
-                : await client.TestRunsController_postTestRunAsync(testRun);
-
-            var status = response.Status switch
-            {
-                "new" => TestRunStatus.New,
-                "ok" => TestRunStatus.Ok,
-                "unresolved" => TestRunStatus.Unresolved,
-                "failed" => TestRunStatus.Failed,
-                "approved" => TestRunStatus.Approved,
-                "autoApproved" => TestRunStatus.AutoApproved,
-                _ => throw new VisualRegressionTrackerError("Unexpected status")
-            };
-
-            var result = new TestRunResult
-            {
-                Status = status,
-                Url = response.Url,
-                ImageUrl = $"{response.Url}/{response.ImageName}",
-                BaselineUrl = !string.IsNullOrEmpty(response.BaselineName)
-                    ? $"{response.Url}/{response.BaselineName}"
-                    : null,
-                DiffUrl = !string.IsNullOrEmpty(response.DiffName)
-                    ? $"{response.Url}/{response.DiffName}"
-                    : null,
-            };
-
-            return result;
+            buildId = null;
+            projectId = null;
         }
 
         public async Task<TestRunResult> Track(
@@ -187,44 +111,55 @@ namespace VisualRegressionTracker
             string comment = null,
             IEnumerable<IgnoreAreaDto> ignoreAreas = null)
         {
-            var dto = new CreateTestRequestDto
-            {
-                BuildId = BuildId,
-                ProjectId = ProjectId,
-                BranchName = config.BranchName,
-                Name = name,
-                ImageBase64 = imageBase64,
-                Os = os,
-                Browser = browser,
-                Viewport = viewport,
-                Device = device,
-                CustomTags = customTags,
-                Comment = comment,
-                DiffTollerancePercent = diffTollerancePercent ?? 0,
-                IgnoreAreas = ignoreAreas == null ? null : new List<IgnoreAreaDto>(ignoreAreas)
-            };
-
-            var result = await SubmitTestRun(dto, cancellationToken).ConfigureAwait(false);
-
-            if (result.Status == TestRunStatus.AutoApproved)
-            {
-                return result;
+            if (!IsStarted) {
+                throw new VisualRegressionTrackerError("Visual Regression Tracker has not been started");
             }
 
-            if (!config.EnableSoftAssert && result.Status != TestRunStatus.Ok)
-            {
-                throw new VisualRegressionTrackerError(result.Status switch
+            var response = await client.PostTestRun(
+                new CreateTestRequestDto
                 {
-                    TestRunStatus.New => $"No baseline: {result.Url}",
-                    TestRunStatus.Unresolved => $"Difference found: {result.Url}",
-                    _ => throw new VisualRegressionTrackerError("Unexpected status")
-                });
+                    Name = name,
+                    ImageBase64 = imageBase64,
+                    BuildId = buildId,
+                    ProjectId = projectId,
+                    BranchName = config.BranchName,
+                    Os = os,
+                    Browser = browser,
+                    Viewport = viewport,
+                    Device = device,
+                    CustomTags = customTags,
+                    DiffTollerancePercent = diffTollerancePercent,
+                    Comment = comment,
+                    IgnoreAreas = ignoreAreas
+                },
+                cancellationToken ?? CancellationToken.None).ConfigureAwait(false);
+
+            var result = new TestRunResult
+            {
+                Status = ParseStatus(response.Status),
+                Url = response.Url,
+                ImageUrl = client.ImageUrl(response.ImageName),
+                DiffUrl = client.ImageUrl(response.DiffName),
+                BaselineUrl = client.ImageUrl(response.BaselineName),
+            };
+
+            var failure = result.Status switch
+            {
+                TestRunStatus.New => $"No baseline: {result.Url}",
+                TestRunStatus.Unresolved => $"Difference found: {result.Url}",
+                _ => null
+            };
+            if (failure != null) {
+                if (!config.EnableSoftAssert) {
+                    throw new VisualRegressionTrackerError(failure);
+                }
+                Console.Error.WriteLine(failure);
             }
 
             return result;
         }
- 
-        public Task<TestRunResult> Track(
+
+        public async Task<TestRunResult> Track(
             string name,
             Stream image,
             CancellationToken? cancellationToken = null,
@@ -237,16 +172,15 @@ namespace VisualRegressionTracker
             string comment = null,
             IEnumerable<IgnoreAreaDto> ignoreAreas = null)
         {
-            using var base64Stream = new CryptoStream(image, new ToBase64Transform(), CryptoStreamMode.Read);
-            using var reader = new StreamReader(base64Stream);
-            var imageBase64 = reader.ReadToEnd();
+            using var buffer = new MemoryStream();
+            await image.CopyToAsync(buffer, cancellationToken ?? CancellationToken.None).ConfigureAwait(false);
 
-            return Track(
+            return await Track(
                 name,
-                imageBase64,
+                Convert.ToBase64String(buffer.GetBuffer(), 0, (int)buffer.Length),
                 cancellationToken,
                 os, browser, viewport, device, customTags, diffTollerancePercent, comment, ignoreAreas
-            );
+            ).ConfigureAwait(false);
         }
 
         public Task<TestRunResult> Track(
@@ -262,14 +196,26 @@ namespace VisualRegressionTracker
             string comment = null,
             IEnumerable<IgnoreAreaDto> ignoreAreas = null)
         {
-            using var memoryStream = new MemoryStream(image);
-
             return Track(
                 name,
-                memoryStream,
+                Convert.ToBase64String(image),
                 cancellationToken,
                 os, browser, viewport, device, customTags, diffTollerancePercent, comment, ignoreAreas
             );
+        }
+
+        private static TestRunStatus ParseStatus(string status)
+        {
+            return status switch
+            {
+                "new" => TestRunStatus.New,
+                "ok" => TestRunStatus.Ok,
+                "unresolved" => TestRunStatus.Unresolved,
+                "failed" => TestRunStatus.Failed,
+                "approved" => TestRunStatus.Approved,
+                "autoApproved" => TestRunStatus.AutoApproved,
+                _ => TestRunStatus.Unknown
+            };
         }
     }
 }

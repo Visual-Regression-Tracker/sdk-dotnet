@@ -1,26 +1,32 @@
 using System;
 using System.IO;
 using System.Linq;
-using Newtonsoft.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace VisualRegressionTracker
 {
     public class Config
     {
-        private static readonly JsonSerializer serializer = new JsonSerializer();
+        private static readonly JsonSerializerOptions jsonOptions = new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true,
+            ReadCommentHandling = JsonCommentHandling.Skip,
+            AllowTrailingCommas = true
+        };
         public static readonly string DefaultPath = "vrt.json";
 
-        [JsonProperty("apiUrl")]
+        [JsonPropertyName("apiUrl")]
         public string ApiUrl { get; set; } = "http://localhost:4200";
-        [JsonProperty("ciBuildId")]
+        [JsonPropertyName("ciBuildId")]
         public string CiBuildId { get; set; }
-        [JsonProperty("branchName")]
+        [JsonPropertyName("branchName")]
         public string BranchName { get; set; }
-        [JsonProperty("project")]
+        [JsonPropertyName("project")]
         public string Project { get; set; }
-        [JsonProperty("apiKey")]
+        [JsonPropertyName("apiKey")]
         public string ApiKey { get; set; }
-        [JsonProperty("enableSoftAssert")]
+        [JsonPropertyName("enableSoftAssert")]
         public bool EnableSoftAssert { get; set; }
 
         public void CheckComplete()
@@ -76,11 +82,8 @@ namespace VisualRegressionTracker
 
         public static Config FromFile(string path)
         {
-            using (var file = File.OpenText(path))
-            {
-                var config = (Config)serializer.Deserialize(file, typeof(Config));
-                return config;
-            }
+            using var file = File.OpenRead(path);
+            return JsonSerializer.Deserialize<Config>(file, jsonOptions);
         }
 
         public void ApplyEnvironment()
