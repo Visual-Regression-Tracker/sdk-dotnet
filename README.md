@@ -1,13 +1,15 @@
 # .Net SDK for [Visual Regression Tracker](https://github.com/Visual-Regression-Tracker/Visual-Regression-Tracker)
 
-[![NuGet version](https://buildstats.info/nuget/VisualRegressionTracker)](https://www.nuget.org/packages/VisualRegressionTracker)
+[![NuGet version](https://img.shields.io/nuget/v/VisualRegressionTracker)](https://www.nuget.org/packages/VisualRegressionTracker)
 [![Codacy Badge](https://app.codacy.com/project/badge/Grade/0b98190cea064d6f9f1210da653ba37b)](https://www.codacy.com/gh/Visual-Regression-Tracker/sdk-dotnet?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=Visual-Regression-Tracker/sdk-dotnet&amp;utm_campaign=Badge_Grade)
 [![Codacy Badge](https://app.codacy.com/project/badge/Coverage/0b98190cea064d6f9f1210da653ba37b)](https://www.codacy.com/gh/Visual-Regression-Tracker/sdk-dotnet?utm_source=github.com&utm_medium=referral&utm_content=Visual-Regression-Tracker/sdk-dotnet&utm_campaign=Badge_Coverage)
 
 ## Install
 
-```csharp
-dotnet package add VisualRegressionTracker
+Requires .NET 10.
+
+```sh
+dotnet add package VisualRegressionTracker
 ```
 
 ## Usage
@@ -100,7 +102,7 @@ await vrt.Track(
     // Name to be displayed
     "Image name",
 
-    // Base64 encoded string
+    // Base64 encoded string, byte[] or Stream
     image,
 
     // Allowed mismatch tollerance in %
@@ -115,26 +117,37 @@ await vrt.Track(
     comment: "test comment",
 
     // Array of areas to be ignored
-    ignoreAreas: new [] {
-        IgnoreArea(
+    ignoreAreas: new[] {
+        new IgnoreAreaDto {
             // X-coordinate relative of left upper corner
-            10,
+            X = 10,
             // Y-coordinate relative of left upper corner
-            20,
+            Y = 20,
             // Area width in px
-            300,
-            // Height width in px
-            400
-        )
-    },
+            Width = 300,
+            // Area height in px
+            Height = 400
+        }
+    }
 );
 ```
 
-### Example with Microsoft Playwright
+`Track` returns a `TestRunResult` with the `Status`, the link to the test run in the
+web app (`Url`) and the `ImageUrl`, `DiffUrl` and `BaselineUrl` of its images.
+
+`New` (no baseline yet) and `Unresolved` (difference found) fail the check: `Track`
+throws a `VisualRegressionTrackerError`, or with `EnableSoftAssert` writes the message
+to the standard error stream and returns the result. Every other status, including
+`Unknown` for a status this SDK does not know, is returned.
+
+When the server rejects a request, `Track`, `Start` and `Stop` throw a `ServerError`
+with the HTTP `StatusCode` and the server's `ServerMessage`.
+
+### Example with [Microsoft Playwright](https://playwright.dev/dotnet/)
 
 #### Imports
 ```csharp
-using PlaywrightSharp;
+using Microsoft.Playwright;
 using VisualRegressionTracker;
 ```
 
@@ -143,7 +156,7 @@ using VisualRegressionTracker;
 using var playwright = await Playwright.CreateAsync();
 await using var browser = await playwright.Chromium.LaunchAsync();
 var page = await browser.NewPageAsync();
-await page.GoToAsync("https://github.com/Visual-Regression-Tracker/sdk-dotnet/tree/main");
+await page.GotoAsync("https://github.com/Visual-Regression-Tracker/sdk-dotnet/tree/main");
 var screenshot = await page.ScreenshotAsync();
 ```
 
