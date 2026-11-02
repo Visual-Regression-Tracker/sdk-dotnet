@@ -22,6 +22,14 @@ jobs:
             echo "::error::Tag $GITHUB_REF_NAME does not match <Version>$version</Version> in VisualRegressionTracker.csproj"
             exit 1
           fi
+      - name: Extract release notes
+        run: |
+          mkdir -p artifacts
+          awk -v version="$GITHUB_REF_NAME" '/^## / { section = ($2 == version); next } section' CHANGELOG.md > artifacts/release-notes.md
+          if ! grep -q '[^[:space:]]' artifacts/release-notes.md; then
+            echo "::error::CHANGELOG.md has no '## $GITHUB_REF_NAME' section"
+            exit 1
+          fi
       - name: Test
         run: dotnet test --configuration Release
       - name: Pack
@@ -29,7 +37,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: package
-          path: artifacts/*.nupkg
+          path: artifacts
           if-no-files-found: error
 
   publish:
@@ -61,4 +69,4 @@ jobs:
         run: |
           prerelease=()
           if [[ "$GITHUB_REF_NAME" == *-* ]]; then prerelease=(--prerelease); fi
-          gh release create "$GITHUB_REF_NAME" artifacts/*.nupkg --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes "${prerelease[@]}"
+          gh release create "$GITHUB_REF_NAME" artifacts/*.nupkg --repo "$GITHUB_REPOSITORY" --verify-tag --notes-file artifacts/release-notes.md "${prerelease[@]}"
