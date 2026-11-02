@@ -21,6 +21,8 @@ dotnet add package VisualRegressionTracker
 | `BranchName` | `VRT_BRANCHNAME` | `branchName` | required | current git branch |
 | `CiBuildId` | `VRT_CIBUILDID` | `ciBuildId` | none | CI build ID or commit SHA; a number is accepted in `vrt.json` |
 | `EnableSoftAssert` | `VRT_ENABLESOFTASSERT` | `enableSoftAssert` | `false` | log a failed check instead of throwing; `true`, `1` (any case for `true`) |
+| `SourceBranch` | `VRT_SOURCEBRANCH` | `sourceBranch` | none | branch to compare against instead of the project's main branch |
+| `HttpTimeoutInSeconds` | `VRT_HTTPTIMEOUTINSECONDS` | `httpTimeoutInSeconds` | `360` | how long to wait for each response; `0` waits without limit, at most `2147483` |
 
 A `Config` passed to the constructor is used as it is. Without one, the tracker reads
 `vrt.json` from the current directory (or the path given to `Config.GetDefault(path)`),
@@ -37,6 +39,8 @@ var config = new Config
     CiBuildId = "commit_sha",
     BranchName = "develop",
     EnableSoftAssert = false,
+    SourceBranch = "main",
+    HttpTimeoutInSeconds = 360,
 };
 using var vrt = new VisualRegressionTracker.VisualRegressionTracker(config);
 ```
@@ -50,7 +54,9 @@ As `vrt.json` (comments, trailing commas and any property case are accepted):
   "apiKey": "tXZVHX0EA4YQM1MGDD",
   "ciBuildId": "commit_sha",
   "branchName": "develop",
-  "enableSoftAssert": false
+  "enableSoftAssert": false,
+  "sourceBranch": "main",
+  "httpTimeoutInSeconds": 360
 }
 ```
 
@@ -63,15 +69,18 @@ export VRT_APIKEY="tXZVHX0EA4YQM1MGDD"
 export VRT_CIBUILDID="commit_sha"
 export VRT_BRANCHNAME="develop"
 export VRT_ENABLESOFTASSERT=true
+export VRT_SOURCEBRANCH="main"
+export VRT_HTTPTIMEOUTINSECONDS=360
 ```
 
 ```csharp
 using var vrt = new VisualRegressionTracker.VisualRegressionTracker();
 ```
 
-When you do not pass an `HttpClient`, the tracker creates its own with a 360 s timeout,
-because the server compares the images while it answers `Track`, and disposing the
-tracker disposes that client. A client you pass in keeps its own timeout and is left open.
+The default timeout is long because the server compares the images, possibly with a VLM,
+before it answers `Track`. When you do not pass an `HttpClient`, the tracker creates its
+own with `HttpTimeoutInSeconds` and a 10 s connect timeout, and disposing the tracker
+disposes that client. A client you pass in keeps its own settings and is left open.
 
 ## Usage
 
@@ -89,8 +98,9 @@ await using (await vrt.Start())
 
 Disposing the value `Start` returns stops the build. Without `using`, call `await vrt.Stop()`.
 
-`Track` takes the image as a base64 string, a `byte[]` or a `Stream`, and these optional
-arguments:
+`Track` takes the image as a base64 string (sent as JSON), or as a `byte[]`, a `Stream` or
+a `FileInfo` (sent as `multipart/form-data`, which is smaller and has its own server limit,
+`MULTIPART_FILE_SIZE_LIMIT`). The optional arguments are:
 
 ```csharp
 await vrt.Track(
@@ -103,11 +113,13 @@ await vrt.Track(
     customTags: "smoke",
     diffTollerancePercent: 1,
     comment: "after the header redesign",
-    ignoreAreas: new[] { new IgnoreAreaDto { X = 10, Y = 20, Width = 300, Height = 400 } });
+    ignoreAreas: new[] { new IgnoreAreaDto { X = 10, Y = 20, Width = 300, Height = 400 } },
+    merge: false);
 ```
 
 `diffTollerancePercent` is the allowed share of different pixels in percent (spelled as in
 the VRT API). Each `IgnoreAreaDto` is a rectangle in pixels from the top-left corner.
+`merge` is passed to the server as is and left out when not given.
 
 With [Microsoft Playwright](https://playwright.dev/dotnet/):
 
@@ -133,7 +145,7 @@ app (`Url`) and the `ImageUrl`, `DiffUrl` and `BaselineUrl` of its images
 | `AutoApproved` | approved automatically | returns |
 | `Approved` | approved | returns |
 | `Failed` | rejected | returns |
-| `Unknown` | a status this SDK does not know | returns |
+| `Unknown` | a status this SDK does not know | returns, with a warning on the standard error stream |
 
 A failing status throws a `VisualRegressionTrackerError`, or with `EnableSoftAssert`
 writes the message to the standard error stream and returns the result.
@@ -143,6 +155,9 @@ writes the message to the standard error stream and returns the result.
 - The server rejects a request: `ServerError`, a `VisualRegressionTrackerError` with the
   HTTP `StatusCode` and the server's `ServerMessage`. 413 and 422 add a hint about the
   server's body and image size limits.
+- The server is busy (503 with `Retry-After`, for example a full image diff queue): the
+  request is repeated after the given time, at most 3 times and waiting at most 60 s each
+  time, then `ServerError` is thrown. A 503 without `Retry-After` is not repeated.
 - Network failure, timeout or a response that is not from the VRT API:
   `VisualRegressionTrackerError`.
 - Incomplete configuration: `MissingConfigurationError` naming the field.

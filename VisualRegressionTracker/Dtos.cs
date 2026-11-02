@@ -23,6 +23,8 @@ namespace VisualRegressionTracker
         public double? DiffTollerancePercent { get; init; }
         public string Comment { get; init; }
         public IEnumerable<IgnoreAreaDto> IgnoreAreas { get; init; }
+        public string SourceBranch { get; init; }
+        public bool? Merge { get; init; }
     }
 
     internal record TestRunResultDto(string Status, string Url, string ImageName, string DiffName, string BaselineName);

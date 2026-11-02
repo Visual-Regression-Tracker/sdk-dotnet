@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Text.Json;
@@ -13,9 +14,11 @@ namespace VisualRegressionTracker
             PropertyNameCaseInsensitive = true,
             ReadCommentHandling = JsonCommentHandling.Skip,
             AllowTrailingCommas = true,
+            NumberHandling = JsonNumberHandling.AllowReadingFromString,
             Converters = { new StringOrNumberConverter(), new BooleanLikeConverter() }
         };
         public static readonly string DefaultPath = "vrt.json";
+        private const int MaxHttpTimeoutInSeconds = int.MaxValue / 1000;
 
         [JsonPropertyName("apiUrl")]
         public string ApiUrl { get; set; } = "http://localhost:4200";
@@ -29,6 +32,11 @@ namespace VisualRegressionTracker
         public string ApiKey { get; set; }
         [JsonPropertyName("enableSoftAssert")]
         public bool EnableSoftAssert { get; set; }
+        [JsonPropertyName("sourceBranch")]
+        public string SourceBranch { get; set; }
+        // the server compares the images inside POST /test-runs, and a VLM check can take 300 s
+        [JsonPropertyName("httpTimeoutInSeconds")]
+        public int HttpTimeoutInSeconds { get; set; } = 360;
 
         public void CheckComplete()
         {
@@ -43,6 +51,10 @@ namespace VisualRegressionTracker
             }
             if (string.IsNullOrEmpty(ApiKey)) {
                 throw new MissingConfigurationError(nameof(ApiKey), $"{nameof(ApiKey)} is not specified.'");
+            }
+            if (HttpTimeoutInSeconds < 0 || HttpTimeoutInSeconds > MaxHttpTimeoutInSeconds) {
+                throw new VisualRegressionTrackerError(
+                    $"{nameof(HttpTimeoutInSeconds)} must be between 0 (no limit) and {MaxHttpTimeoutInSeconds}, got {HttpTimeoutInSeconds}.");
             }
         }
 
@@ -102,6 +114,11 @@ namespace VisualRegressionTracker
             maybe_apply_env("VRT_PROJECT", v => Project = v);
             maybe_apply_env("VRT_APIKEY", v => ApiKey = v);
             maybe_apply_env("VRT_ENABLESOFTASSERT", v => EnableSoftAssert = IsTrue(v));
+            maybe_apply_env("VRT_SOURCEBRANCH", v => SourceBranch = v);
+            maybe_apply_env("VRT_HTTPTIMEOUTINSECONDS", v => HttpTimeoutInSeconds =
+                int.TryParse(v, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var seconds)
+                    ? seconds
+                    : throw new VisualRegressionTrackerError($"VRT_HTTPTIMEOUTINSECONDS must be a whole number of seconds, got '{v}'."));
         }
 
         private static void maybe_apply_env(string name, Action<string> action)
