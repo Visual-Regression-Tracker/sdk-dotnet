@@ -12,6 +12,25 @@ Requires .NET 10.
 dotnet add package VisualRegressionTracker
 ```
 
+## Upgrading from 4.x
+
+5.0.0 works with VRT server 6.0 and has these breaking changes:
+
+- It targets .NET 10 (`net10.0`) only.
+- The NSwag-generated `ApiClient`, `ApiException`, `ApiException<T>` and DTOs are gone.
+  `IgnoreAreaDto` stays, without `AdditionalProperties`.
+- Server errors throw `ServerError` (a `VisualRegressionTrackerError` with `StatusCode`
+  and `ServerMessage`) instead of `ApiException`.
+- Only `New` and `Unresolved` fail `Track`. `Failed` and `Approved` are returned instead
+  of thrown, and a status this SDK does not know is returned as `Unknown`.
+- `ImageUrl`, `DiffUrl` and `BaselineUrl` point to `{apiUrl}/images/{name}` (they were
+  wrong before) and are `null` when the server returns no image name.
+- `vrt.json` is read with System.Text.Json: comments, trailing commas, any property case,
+  a numeric `ciBuildId` and `"true"`/`"1"` for `enableSoftAssert` still work, but single
+  quotes do not. A file that cannot be read throws a `VisualRegressionTrackerError`
+  naming it.
+- `VisualRegressionTracker` is `IDisposable`; see [Setup / Teardown](#setup--teardown).
+
 ## Usage
 
 ### Import
@@ -76,6 +95,15 @@ vrt = new VisualRegressionTracker();
 ```
 
 ### Setup / Teardown
+
+Create one tracker for the whole test run and dispose it at the end. When you do not
+pass an `HttpClient`, the tracker creates its own with a 360 s timeout, because the
+server compares the images while it answers `Track`, and disposing the tracker disposes
+that client. A client you pass in keeps its own timeout and is left open.
+
+```csharp
+using var vrt = new VisualRegressionTracker.VisualRegressionTracker(config, httpClient);
+```
 
 ```csharp
 await using (await vrt.Start())

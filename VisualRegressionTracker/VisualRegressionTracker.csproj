@@ -9,6 +9,10 @@
     <PackageProjectUrl>https://github.com/Visual-Regression-Tracker/Visual-Regression-Tracker</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Visual-Regression-Tracker/sdk-dotnet</RepositoryUrl>
     <PackageDescription>Open source, self hosted solution for visual testing and managing results of visual testing.</PackageDescription>
-    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="VisualRegressionTracker.Tests" />
+    <None Include="..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
 </Project>

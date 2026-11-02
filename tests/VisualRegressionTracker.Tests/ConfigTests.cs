@@ -75,6 +75,35 @@ namespace VisualRegressionTracker.Tests
             Assert.True(actual.EnableSoftAssert);
         }
 
+        [Theory]
+        [InlineData("true", true)]
+        [InlineData("\"true\"", true)]
+        [InlineData("\"True\"", true)]
+        [InlineData("\"1\"", true)]
+        [InlineData("1", true)]
+        [InlineData("\"false\"", false)]
+        [InlineData("0", false)]
+        [MoveCurrentDirectory]
+        public void FromFile_AcceptsBooleanLikeEnableSoftAssert(string json, bool expected)
+        {
+            File.WriteAllText("vrt.json", $@"{{""enableSoftAssert"": {json}}}");
+
+            Assert.Equal(expected, Config.FromFile("vrt.json").EnableSoftAssert);
+        }
+
+        [Fact]
+        [MoveCurrentDirectory]
+        [ClearEnvironment]
+        public void GetDefault_ReportsUnreadableConfigFile()
+        {
+            File.WriteAllText(Config.DefaultPath, "{'apiUrl': 'http://vrt:4200'}");
+
+            var ex = Assert.Throws<VisualRegressionTrackerError>(() => Config.GetDefault());
+
+            Assert.Contains(Config.DefaultPath, ex.Message);
+            Assert.IsType<JsonException>(ex.InnerException, exactMatch: false);
+        }
+
         [Fact]
         [MoveCurrentDirectory]
         public void FromFile_AcceptsNumericCiBuildId()

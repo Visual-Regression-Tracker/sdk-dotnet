@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Text;
@@ -48,6 +49,21 @@ namespace VisualRegressionTracker.Tests
         private static string Header(HttpRequestMessage request, string name)
         {
             return request.Headers.TryGetValues(name, out var values) ? string.Join(",", values) : null;
+        }
+    }
+
+    public sealed class NonSeekableStream : MemoryStream
+    {
+        public NonSeekableStream(byte[] buffer) : base(buffer) { }
+
+        public override bool CanSeek => false;
+
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
         }
     }
 

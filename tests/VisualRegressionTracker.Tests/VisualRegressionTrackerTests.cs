@@ -502,6 +502,68 @@ namespace VisualRegressionTracker.Tests
         }
 
         [Fact]
+        public async Task Track_StreamFromCurrentPosition()
+        {
+            var image = new MemoryStream(new byte[] { 0xff, 0xff, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 }) { Position = 2 };
+            await StartBuild();
+            handler.Respond(HttpStatusCode.Created, TestRunJson("ok"));
+
+            await vrt.Track("image name", image);
+
+            Assert.Contains(@"""imageBase64"":""AAECAwQFBgcICQ==""", handler.LastRequest.Body);
+        }
+
+        [Fact]
+        public async Task Track_NonSeekableStream()
+        {
+            var image = new NonSeekableStream(new byte[] { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 });
+            await StartBuild();
+            handler.Respond(HttpStatusCode.Created, TestRunJson("ok"));
+
+            await vrt.Track("image name", image);
+
+            Assert.Contains(@"""imageBase64"":""AAECAwQFBgcICQ==""", handler.LastRequest.Body);
+        }
+
+        [Fact]
+        public void OwnHttpClient_WaitsForSlowComparisons()
+        {
+            using var tracker = new VisualRegressionTracker(config);
+
+            Assert.Equal(TimeSpan.FromSeconds(360), tracker.HttpTimeout);
+        }
+
+        [Fact]
+        public void InjectedHttpClient_KeepsItsTimeout()
+        {
+            using var tracker = new VisualRegressionTracker(config, new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(5) });
+
+            Assert.Equal(TimeSpan.FromSeconds(5), tracker.HttpTimeout);
+        }
+
+        [Fact]
+        public async Task Dispose_DisposesOwnHttpClient()
+        {
+            var tracker = new VisualRegressionTracker(config);
+
+            tracker.Dispose();
+
+            await Assert.ThrowsAsync<ObjectDisposedException>(() => tracker.Start());
+        }
+
+        [Fact]
+        public async Task Dispose_LeavesInjectedHttpClientOpen()
+        {
+            var httpClient = new HttpClient(handler);
+            new VisualRegressionTracker(config, httpClient).Dispose();
+            handler.Respond(HttpStatusCode.OK);
+
+            using var response = await httpClient.GetAsync("http://localhost:4200/");
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
+
+        [Fact]
         public async Task Track_Array()
         {
             await StartBuild();

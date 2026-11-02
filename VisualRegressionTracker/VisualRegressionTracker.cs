@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace VisualRegressionTracker
 {
-    public class VisualRegressionTracker
+    public class VisualRegressionTracker : IDisposable
     {
         private class Disposer : IAsyncDisposable 
         {
@@ -28,6 +28,7 @@ namespace VisualRegressionTracker
 
         private readonly Config config;
         private readonly ApiClient client;
+        private readonly HttpClient ownHttpClient;
         private string buildId;
         private string projectId;
 
@@ -44,11 +45,23 @@ namespace VisualRegressionTracker
             this.config = config ?? Config.GetDefault();
             this.config.CheckComplete();
 
+            if (httpClient == null) {
+                // the server compares the images inside POST /test-runs, and a VLM check can take 300 s
+                ownHttpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(360) };
+            }
+
             client = new ApiClient(
-                httpClient ?? new HttpClient(),
+                httpClient ?? ownHttpClient,
                 this.config.ApiUrl,
                 this.config.ApiKey,
                 this.config.Project);
+        }
+
+        internal TimeSpan HttpTimeout => client.Timeout;
+
+        public void Dispose()
+        {
+            ownHttpClient?.Dispose();
         }
 
         public bool IsStarted => buildId != null && projectId != null;

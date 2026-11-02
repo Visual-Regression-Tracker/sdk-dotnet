@@ -14,7 +14,7 @@ namespace VisualRegressionTracker
             PropertyNameCaseInsensitive = true,
             ReadCommentHandling = JsonCommentHandling.Skip,
             AllowTrailingCommas = true,
-            Converters = { new StringOrNumberConverter() }
+            Converters = { new StringOrNumberConverter(), new BooleanLikeConverter() }
         };
         public static readonly string DefaultPath = "vrt.json";
 
@@ -85,7 +85,14 @@ namespace VisualRegressionTracker
         public static Config FromFile(string path)
         {
             using var file = File.OpenRead(path);
-            return JsonSerializer.Deserialize<Config>(file, jsonOptions);
+            try
+            {
+                return JsonSerializer.Deserialize<Config>(file, jsonOptions);
+            }
+            catch (JsonException ex)
+            {
+                throw new VisualRegressionTrackerError($"Cannot read config file '{path}': {ex.Message}", ex);
+            }
         }
 
         public void ApplyEnvironment()
@@ -95,8 +102,7 @@ namespace VisualRegressionTracker
             maybe_apply_env("VRT_BRANCHNAME", v => BranchName = v);
             maybe_apply_env("VRT_PROJECT", v => Project = v);
             maybe_apply_env("VRT_APIKEY", v => ApiKey = v);
-            maybe_apply_env("VRT_ENABLESOFTASSERT", v => 
-                EnableSoftAssert = new[] {"true", "1"}.Contains(v.ToLowerInvariant()));
+            maybe_apply_env("VRT_ENABLESOFTASSERT", v => EnableSoftAssert = IsTrue(v));
         }
 
         private static void maybe_apply_env(string name, Action<string> action)
@@ -120,6 +126,30 @@ namespace VisualRegressionTracker
             {
                 writer.WriteStringValue(value);
             }
+        }
+
+        private sealed class BooleanLikeConverter : JsonConverter<bool>
+        {
+            public override bool Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+            {
+                return reader.TokenType switch
+                {
+                    JsonTokenType.True => true,
+                    JsonTokenType.False => false,
+                    JsonTokenType.Number => reader.GetDouble() != 0,
+                    _ => IsTrue(reader.GetString())
+                };
+            }
+
+            public override void Write(Utf8JsonWriter writer, bool value, JsonSerializerOptions options)
+            {
+                writer.WriteBooleanValue(value);
+            }
+        }
+
+        private static bool IsTrue(string value)
+        {
+            return new[] {"true", "1"}.Contains(value.ToLowerInvariant());
         }
 
         private static string determine_config_path()
