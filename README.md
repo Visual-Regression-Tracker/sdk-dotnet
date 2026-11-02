@@ -198,10 +198,10 @@ await vrt.Track("sdk-dotnet", screenshot);
 ## Releasing
 
 Merging to `main` releases. [semantic-release](https://semantic-release.gitbook.io/) reads the
-[Conventional Commits](https://www.conventionalcommits.org/) since the last tag: `fix:` makes a
-patch, `feat:` a minor, and `!` after the type (`feat!:`) or a `BREAKING CHANGE:` footer a major
-release. Other types (`chore:`, `ci:`, `docs:`, ...) release nothing. With squash merging, the PR
-title is the commit message, so give the PR a conventional title.
+[Conventional Commits](https://www.conventionalcommits.org/) since the last tag: `fix:`, `perf:` and `revert:`
+make a patch, `feat:` a minor, and `!` after the type (`feat!:`) or a `BREAKING CHANGE:` footer a major
+release. Other types (`chore:`, `ci:`, `docs:`, ...) release nothing. A squash merge takes the PR title (or, for a
+single-commit PR, that commit's message) as its subject, so keep both conventional.
 
 The `Release` workflow runs the tests, tags the commit (`5.1.0`, no `v`), packs the SDK with that
 version (`-p:Version`), publishes it to NuGet through
@@ -210,3 +210,6 @@ publishes the GitHub release with the generated notes and the `.nupkg`. Nothing 
 It needs a trusted publishing policy on nuget.org for this repository, workflow `release.yml` and
 environment `nuget`, and the `NUGET_USER` repository variable holding the nuget.org user name that
 owns the policy.
+
+If publishing fails, the tag and a draft release already exist: re-run the failed jobs of that run
+(not the whole run) before anything else is merged.
