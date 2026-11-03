@@ -163,6 +163,12 @@ writes the message to the standard error stream and returns the result.
 - Incomplete configuration: `MissingConfigurationError` naming the field.
 - A `vrt.json` that cannot be read: `VisualRegressionTrackerError` naming the file.
 
+## Upgrading from 5.x
+
+6.0.0 removes the `Track` overloads without `merge` that 5.1 kept hidden for binary compatibility
+with 5.0. Source code compiles unchanged; assemblies compiled against 5.0.x that call `Track` must be
+rebuilt.
+
 ## Upgrading from 4.x
 
 5.0.0 works with VRT server 6.0 and has these breaking changes:
