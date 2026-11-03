@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.IO;
 using System.Net.Http;
 using System.Threading;
@@ -192,57 +191,6 @@ namespace VisualRegressionTracker
             var bytes = await File.ReadAllBytesAsync(image.FullName, cancellationToken ?? CancellationToken.None).ConfigureAwait(false);
 
             return await Track(name, bytes, cancellationToken, os, browser, viewport, device, customTags, diffTollerancePercent, comment, ignoreAreas, merge).ConfigureAwait(false);
-        }
-
-        [EditorBrowsable(EditorBrowsableState.Never)]
-        public Task<TestRunResult> Track(
-            string name,
-            string imageBase64,
-            CancellationToken? cancellationToken,
-            string os,
-            string browser,
-            string viewport,
-            string device,
-            string customTags,
-            double? diffTollerancePercent,
-            string comment,
-            IEnumerable<IgnoreAreaDto> ignoreAreas)
-        {
-            return Track(name, imageBase64, cancellationToken, os, browser, viewport, device, customTags, diffTollerancePercent, comment, ignoreAreas, merge: null);
-        }
-
-        [EditorBrowsable(EditorBrowsableState.Never)]
-        public Task<TestRunResult> Track(
-            string name,
-            Stream image,
-            CancellationToken? cancellationToken,
-            string os,
-            string browser,
-            string viewport,
-            string device,
-            string customTags,
-            double? diffTollerancePercent,
-            string comment,
-            IEnumerable<IgnoreAreaDto> ignoreAreas)
-        {
-            return Track(name, image, cancellationToken, os, browser, viewport, device, customTags, diffTollerancePercent, comment, ignoreAreas, merge: null);
-        }
-
-        [EditorBrowsable(EditorBrowsableState.Never)]
-        public Task<TestRunResult> Track(
-            string name,
-            byte[] image,
-            CancellationToken? cancellationToken,
-            string os,
-            string browser,
-            string viewport,
-            string device,
-            string customTags,
-            double? diffTollerancePercent,
-            string comment,
-            IEnumerable<IgnoreAreaDto> ignoreAreas)
-        {
-            return Track(name, image, cancellationToken, os, browser, viewport, device, customTags, diffTollerancePercent, comment, ignoreAreas, merge: null);
         }
 
         private CreateTestRequestDto TestRun(
