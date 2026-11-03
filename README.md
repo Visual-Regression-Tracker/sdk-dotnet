@@ -199,6 +199,21 @@ If publishing fails, the tag and a draft release already exist: re-run the faile
 Release notes are on [GitHub Releases](https://github.com/Visual-Regression-Tracker/sdk-dotnet/releases);
 [CHANGELOG.md](CHANGELOG.md) holds the history up to 5.0.0.
 
+### Release candidates
+
+Every push to `next` releases a pre-release of the next version, tagged `X.Y.Z-rc.N`
+(`6.0.0-rc.1` once a breaking change is in).
+It goes to NuGet as a SemVer 2 pre-release, so NuGet clients keep installing the last stable release
+unless pre-releases are included (`dotnet add package VisualRegressionTracker --prerelease`).
+Its GitHub release is marked as a pre-release.
+
+Breaking changes go into `next` through pull requests that target it. Merge `main` into `next` when
+`main` gets new commits.
+
+To release the final version, merge `next` into `main` with a merge commit, not a squash, so that
+semantic-release still sees the breaking commits. That push releases it. The repository deletes merged
+branches, so create `next` again from `main` before the next round of candidates.
+
 ## Links
 
 - [Visual Regression Tracker](https://github.com/Visual-Regression-Tracker/Visual-Regression-Tracker)
