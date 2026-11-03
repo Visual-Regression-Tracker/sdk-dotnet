@@ -10,3 +10,4 @@ htmlcov
 nuget_key.txt
 /.vs
 artifacts/
+node_modules/
